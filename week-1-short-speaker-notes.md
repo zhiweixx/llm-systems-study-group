@@ -1,6 +1,6 @@
 # Week 1: 30-minute speaker notes
 
-22 slides. 30 minutes of planned material. Questions 1–2 each have a separate solution slide immediately afterward. Prefix-cache hit rates and their worked exercise are reserved for Week 4.
+23 slides. 30 minutes of planned material. Questions 1–2 each have a separate solution slide immediately afterward. Prefix-cache hit rates and their worked exercise are reserved for Week 4.
 
 ## 1. GPU performance and memory for LLMs
 
@@ -30,7 +30,7 @@ Read the left panel as the logical programming model and the right panel as the 
 
 ## 4. H100 SXM 80 GB memory hierarchy
 
-1 minutes
+1 minute
 
 The pyramid shows locality and sharing scope, not capacity-scaled areas or a compulsory path. Registers hold per-thread working values; shared memory is a cooperative workspace local to an SM. L1 and L2 are hardware-managed caches. HBM is stacked DRAM alongside the compute die in the package. H100 SXM has 80 GB HBM and peak bandwidth of 3.35 TB/s. The approximately 50 MB L2 label follows the vendor specification. SRAM is a memory technology used for on-chip caches and shared memory, not an extra hierarchy tier. Focus on where data can be reused, rather than per-SM capacity arithmetic.
 
@@ -49,7 +49,7 @@ Read the supplied Horace He illustration as a warehouse supplying a factory and 
 
 ## 6. Four ways to spend less time moving data
 
-1 minutes
+1 minute
 
 Keep the factory illustration visible while introducing the next four techniques. Lower precision reduces bytes per value. Fusion removes intermediate global-memory traffic between operators. Coalescing packs useful accesses into fewer memory transactions. Tiling reuses a small working set near compute. The categories can overlap in an implementation. The goal is faster useful output, not forcing every workload to become compute-bound. Extra arithmetic, launch overhead, dependencies and finite on-chip resources still matter. The drawing simplifies the path through caches and registers. HBM is GPU DRAM, and SRAM implements on-chip caches and shared memory.
 
@@ -85,7 +85,7 @@ Each thread requests one value in one load instruction. Dark cells mark requeste
 
 ## 10. Tensor layout determines which addresses are nearby
 
-1 minutes
+1 minute
 
 Both panels use the same contiguous row-major 4 by 4 array. Cell numbers are element offsets from the array start, not stored tensor values or byte addresses. The offset formula is 4 times row plus column. Increasing the column within the same row advances by one element; increasing the row while holding the column fixed advances by four. Each selected cell is read by one of four neighboring threads in the same illustrative load. The left mapping varies the column index and requests 0, 1, 2, 3. The right varies the row index and requests 0, 4, 8, 12. The bottom strip shows the shared physical element order 0 through 15, grouped by matrix row. This tiny array illustrates address mapping, not actual transaction counts or a measured performance ratio. In particular, some of these offsets may still fit in one hardware segment depending on element size and alignment. Coalescing concerns the addresses a warp accesses together, rather than whether one individual thread eventually walks a contiguous row. Libraries choose mappings for high-level operations; PyTorch tensor strides describe the layout and a transpose view need not copy data. A larger row stride can spread accesses across many transfer chunks. Native diagram based on CS336 Lecture 5, pages 37–39, with the precise coalescing rule checked against NVIDIA CUDA Best Practices.
 
@@ -94,23 +94,31 @@ Both panels use the same contiguous row-major 4 by 4 array. Cell numbers are ele
 
 ## 11. Tiling: load a small region, then reuse it
 
-2 minutes
+1 minute
 
-Allow 2 minutes. Tiling divides a large matrix multiplication C = A × B into smaller output regions and input stages. This is a simplified shared-memory implementation, not a claim that every GEMM uses exactly this data path. A thread block cooperatively loads an A tile and a B tile from global memory into shared memory, reuses these values to update its output tile, and keeps partial sums in registers. Move along the reduction dimension k: load the next A/B tile pair, then add its contribution to the same partial sums. Only after all k stages does the block write the completed output tile. Global loads may be served by caches; arrows describe the conceptual storage roles, not a mandatory uncached HBM transaction per load. The drawings show one stage and one output tile, not all concurrently executing blocks. Whole matrices need not fit in shared memory. Shared memory and registers are finite: larger tiles can improve reuse but consume more resources and may reduce the number of resident blocks. Synchronization is required when collaborating threads exchange staged data. This concept introduces reuse without CUDA syntax. Based on CS336 Lecture 5, pages 40–43, and the NVIDIA matrix-multiplication shared-memory example.
+Allow 1 minute. Tiling divides a large matrix multiplication C = A × B into smaller output regions and input stages. This is a simplified shared-memory implementation, not a claim that every GEMM uses exactly this data path. A thread block cooperatively loads an A tile and a B tile from global memory into shared memory, reuses these values to update its output tile, and keeps partial sums in registers. Move along the reduction dimension k: load the next A/B tile pair, then add its contribution to the same partial sums. Only after all k stages does the block write the completed output tile. Global loads may be served by caches; arrows describe the conceptual storage roles, not a mandatory uncached HBM transaction per load. The drawings show one stage and one output tile, not all concurrently executing blocks. Whole matrices need not fit in shared memory. Shared memory and registers are finite: larger tiles can improve reuse but consume more resources and may reduce the number of resident blocks. Synchronization is required when collaborating threads exchange staged data. This concept introduces reuse without CUDA syntax. Based on CS336 Lecture 5, pages 40–43, and the NVIDIA matrix-multiplication shared-memory example.
 
 - [CS336 Lecture 5, pp. 40–43](https://raw.githubusercontent.com/stanford-cs336/lectures/main/lecture_05.pdf#page=40)
 - [CUDA shared-memory matrix multiply](https://docs.nvidia.com/cuda/cuda-c-best-practices-guide/index.html#shared-memory-in-matrix-multiplication-c-ab)
 
 ## 12. Tiling reuses inputs across an output tile
 
-2 minutes
+1.5 minutes
 
-Allow 2 minutes. A and B are both 4×4, and this example computes only C[0:2,0:2], the top-left 2×2 output tile. The reduction dimension has four entries and is traversed in two stages of width two. At stage 1, load A[0:2,0:2] and B[0:2,0:2]; at stage 2, load A[0:2,2:4] and B[2:4,0:2]. The solid outlines mark stage 1, and dashed outlines mark stage 2. The a cell means A[0,0] and contributes to C[0,0] and C[0,1], so it is reused across two output columns. The b cell means B[0,0] and contributes to C[0,0] and C[1,0], so it is reused across two output rows. Without explicit reuse, computing four dot products independently issues 4×(4 A values + 4 B values)=32 logical global-memory input loads. Staging each input tile once issues 2×(4 A values + 4 B values)=16 such loads, followed by shared-memory/register reuse. Both versions calculate the same four outputs with the same 16 multiplications and reductions. Output stores are excluded and unchanged. These are illustrative logical input-load counts, not measured HBM transactions: caches can already satisfy repeated global loads, and shared-memory reads and synchronization also have costs. Do not infer a 2× runtime improvement or a halving of all memory traffic. Tile size is constrained by shared-memory/register capacity and occupancy; this toy tile size is explanatory, not a performance recommendation. Based on CS336 Lecture 5, pages 40–43, and NVIDIA’s shared-memory C=AB example.
+Allow 1.5 minutes. A and B are both 4×4, and this example computes only C[0:2,0:2], the top-left 2×2 output tile. The reduction dimension has four entries and is traversed in two stages of width two. At stage 1, load A[0:2,0:2] and B[0:2,0:2]; at stage 2, load A[0:2,2:4] and B[2:4,0:2]. The solid outlines mark stage 1, and dashed outlines mark stage 2. The a cell means A[0,0] and contributes to C[0,0] and C[0,1], so it is reused across two output columns. The b cell means B[0,0] and contributes to C[0,0] and C[1,0], so it is reused across two output rows. Without explicit reuse, computing four dot products independently issues 4×(4 A values + 4 B values)=32 logical global-memory input loads. Staging each input tile once issues 2×(4 A values + 4 B values)=16 such loads, followed by shared-memory/register reuse. Both versions calculate the same four outputs with the same 16 multiplications and reductions. Output stores are excluded and unchanged. These are illustrative logical input-load counts, not measured HBM transactions: caches can already satisfy repeated global loads, and shared-memory reads and synchronization also have costs. Do not infer a 2× runtime improvement or a halving of all memory traffic. Tile size is constrained by shared-memory/register capacity and occupancy; this toy tile size is explanatory, not a performance recommendation. Based on CS336 Lecture 5, pages 40–43, and NVIDIA’s shared-memory C=AB example.
 
 - [CS336 Lecture 5, pp. 40–43](https://raw.githubusercontent.com/stanford-cs336/lectures/main/lecture_05.pdf#page=40)
 - [CUDA shared-memory matrix multiply](https://docs.nvidia.com/cuda/cuda-c-best-practices-guide/index.html#shared-memory-in-matrix-multiplication-c-ab)
 
-## 13. Training stores much more than the weights
+## 13. Tiling: a worked example
+
+1.5 minutes
+
+Allow 1.5 minutes. Use Previous step and Next step on this slide to walk through two rounds of a tiled matrix multiplication. Both full input matrices are 4×4. One teaching block of four threads computes only the top-left 2×2 output tile, one accumulator per thread. Round 1 loads A[0:2,0:2] and B[0:2,0:2], eight input elements in total. Cooperative shared-memory reuse gives partial sums [[1,4],[5,16]]. Round 2 replaces the shared-memory inputs with A[0:2,2:4] and B[2:4,0:2], while retaining the partial sums in registers. Its contribution [[10,4],[22,8]] produces final values [[11,8],[27,24]]. For C[0,0], the two rounds give (1×1 + 2×0) + (3×2 + 4×1) = 11. Only after both rounds are complete does the block write its four results to HBM. Dots in C mark entries not yet written in this demonstration, not numeric zero. Other thread blocks compute the remaining output tiles. Threads must finish cooperative loading before consuming a tile, and finish consuming it before the next round overwrites shared memory. The five steps illustrate work within one kernel, not five separate kernel launches. Input counts describe logical global-memory elements loaded, not physical HBM transactions, and do not imply a fixed speedup. The Print / PDF view shows the completed result and restores the current interactive step afterward. This is an original numerical teaching example based on the NVIDIA shared-memory matrix-multiplication pattern.
+
+- [CUDA shared-memory matrix multiply](https://docs.nvidia.com/cuda/cuda-c-best-practices-guide/index.html#shared-memory-in-matrix-multiplication-c-ab)
+
+## 14. Training stores much more than the weights
 
 1.5 minutes
 
@@ -119,7 +127,7 @@ Use one explicitly specified mixed-precision Adam layout: BF16 weights, BF16 gra
 - [Ultra-Scale Playbook](https://nanotron-ultrascale-playbook.static.hf.space/index.html)
 - [NVIDIA mixed precision](https://docs.nvidia.com/deeplearning/performance/mixed-precision-training/index.html)
 
-## 14. The KV cache grows as generation continues
+## 15. The KV cache grows as generation continues
 
 2 minutes
 
@@ -127,7 +135,7 @@ Prefill processes the prompt and creates cached key/value vectors for its proces
 
 - [Hugging Face KV cache](https://huggingface.co/docs/transformers/main/cache_explanation)
 
-## 15. Question 1: what fits in a 24 GB memory budget?
+## 16. Question 1: what fits in a 24 GB memory budget?
 
 1.5 minutes
 
@@ -135,7 +143,7 @@ Use a decimal 24 GB memory budget. Both cases use the same dense eight-billion-p
 
 
 
-## 16. Solution 1: doubling context can exhaust the budget
+## 17. Solution 1: doubling context can exhaust the budget
 
 1.5 minutes
 
@@ -143,7 +151,7 @@ Weights are eight billion times two bytes, or 16 GB. With a reference rate of 13
 
 
 
-## 17. Use timelines and measurements to find the bottleneck
+## 18. Use timelines and measurements to find the bottleneck
 
 1.5 minutes
 
@@ -153,9 +161,9 @@ These are original schematic timelines, not traces from a measured workload. The
 - [PyTorch CUDA semantics](https://docs.pytorch.org/docs/stable/notes/cuda.html#asynchronous-execution)
 - [PyTorch memory management](https://docs.pytorch.org/docs/stable/notes/cuda.html#memory-management)
 
-## 18. MFU measures useful arithmetic against a compute peak
+## 19. MFU measures useful arithmetic against a compute peak
 
-1 minutes
+1 minute
 
 MFU is a model-level measure. Divide useful model FLOPs per second by the matching aggregate device peak. Approximate dense-transformer training weight-matrix work as 6P FLOPs per token: about 2P forward and 4P backward. Count a multiply-add as two FLOPs. This approximation omits attention and other model details and is not the forward-only inference formula. Use measured global throughput across the group, and match the hardware peak to precision and computation path. GPU activity time is a separate denominator. High activity can coexist with low useful arithmetic throughput because kernels may spend time moving data or doing other work.
 
@@ -163,16 +171,16 @@ MFU is a model-level measure. Divide useful model FLOPs per second by the matchi
 - [NVIDIA dense compute peaks](https://github.com/NVIDIA/exemplar-performance#peak-theoretical-throughput)
 - [NVIDIA GPU-Util definition](https://docs.nvidia.com/deploy/nvidia-smi/index.html#utilization)
 
-## 19. Question 2: estimating MFU
+## 20. Question 2: estimating MFU
 
-1 minutes
+1 minute
 
 Use the next slide for the solution. The throughput is global across the GPU group, not per device. Use dense BF16 Tensor Core peak. Assume the distributed state layout fits memory and ignore attention for this 6P estimate.
 
 - [PaLM, Appendix B](https://jmlr.org/papers/volume24/22-1144/22-1144.pdf#page=90)
 - [NVIDIA dense compute peaks](https://github.com/NVIDIA/exemplar-performance#peak-theoretical-throughput)
 
-## 20. Solution 2: 36.4% MFU
+## 21. Solution 2: 36.4% MFU
 
 1.5 minutes
 
@@ -182,7 +190,7 @@ Useful model arithmetic is 2.880 PFLOP/s and matching group peak is 7.912 PFLOP/
 - [NVIDIA dense compute peaks](https://github.com/NVIDIA/exemplar-performance#peak-theoretical-throughput)
 - [NVIDIA GPU-Util definition](https://docs.nvidia.com/deploy/nvidia-smi/index.html#utilization)
 
-## 21. Match the optimization to the bottleneck
+## 22. Match the optimization to the bottleneck
 
 0.5 minutes
 
@@ -190,7 +198,7 @@ Close the story by tying each technique to the cost it changes. Lower precision 
 
 
 
-## 22. Discussion and further reading
+## 23. Discussion and further reading
 
 0.5 minutes
 
