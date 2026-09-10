@@ -38,26 +38,24 @@ This conceptual pyramid shows proximity and scope, not capacity-scaled areas or 
 - [H100 specifications](https://www.nvidia.com/en-us/data-center/h100/)
 - [Micron HBM](https://www.micron.com/products/memory/hbm)
 
-## 5. Three performance limits: compute, memory and overhead
+## 5. Memory bandwidth can limit GPU speed
 
-2.5 minutes
+2 minutes
 
-Conceptual framing follows Horace He: identify whether arithmetic, data movement or host/launch overhead limits execution before selecting an optimization. The equations and the insufficient-parallelism caveat are corroborated by NVIDIA GPU Performance Background, section 4. The figure is an analytic roofline, not measured data. It uses H100 SXM 80 GB peak HBM bandwidth of 3.35 TB/s and dense BF16 Tensor Core peak of 989 TFLOP/s. Intensity counts FLOPs per physical HBM byte under the declared traffic model. The ridge is 989 / 3.35 = 295.2238806 FLOP/byte. This Tensor Core ceiling is applicable only to eligible matrix computation; a pointwise scalar operator has a different instruction-throughput ceiling. The model assumes enough parallelism and omits launch and other latency limits. Caches and implementation details change the traffic count. The whole application may mix all three regimes. Do not infer a bottleneck from GPU-Util alone.
+Read the supplied Horace He illustration as a warehouse supplying a factory and receiving its output. The boxes and triangles represent input and output data, not literal GPU hardware. On an H100, the warehouse is HBM, which is DRAM; the factory includes GPU arithmetic units and nearby on-chip storage. Bandwidth is the number of bytes transferred per second across a specified interface. Imagine the data path supplies 10 items per second while the factory can process 100: the output cannot exceed the supply rate. Doubling arithmetic capacity alone changes little. With enough data reuse, arithmetic may instead become the limiting resource. These rates are an analogy, not hardware measurements. The terms describe a workload on particular hardware, not a permanent property of a GPU. Here memory-bound means memory-bandwidth limited, distinct from an out-of-memory capacity error. Small workloads may also be limited by submission overhead, covered in the later timeline slide. Source illustration supplied by the presenter from Horace He; technical distinctions corroborated by NVIDIA GPU Performance Background.
 
-- [Horace He](https://horace.io/brrr_intro.html)
+- [Illustration: Horace He (2022)](https://horace.io/brrr_intro.html)
 - [NVIDIA performance guide](https://docs.nvidia.com/deeplearning/performance/dl-performance-gpu-background/index.html#understanding-performance)
-- [H100 specifications](https://www.nvidia.com/en-us/data-center/h100/)
-- [NVIDIA dense compute peaks](https://github.com/NVIDIA/exemplar-performance#peak-theoretical-throughput)
 
-## 6. Fusion avoids writing and rereading an intermediate
+## 6. Less data movement leaves more time for useful compute
 
-1.5 minutes
+2 minutes
 
-The dataflow is a teaching schematic, corroborated by the PyTorch Performance Tuning Guide section on fusion. The dependent operations t = x * 2 followed by y = t + 1 can be combined into one pointwise kernel. Each thread can keep its temporary value in registers, so the entire tensor need not fit in shared memory. The logical accesses are read x, write t, read t, write y versus read x, write y. For N = 2^26 BF16 elements, one tensor is 2^27 bytes = 128 MiB. The stated model assumes all these passes reach HBM: unfused traffic is 512 MiB; fused traffic is 256 MiB. Actual HBM transactions may differ because of cache hits, write behavior and implementation choices. NVIDIA Best Practices supplies bytes-read plus bytes-written divided by time as an effective-bandwidth calculation. At 3.35 TB/s, the traffic-only times under this model are 160.26 and 80.13 microseconds; they are not measured latency or a guarantee of 2x acceleration. Compilers such as torch.compile can fuse eligible operations, but fusion is not guaranteed and excessive register pressure can matter. One PyTorch operator need not universally equal one GPU kernel.
+The supplied annotated illustration highlights traffic between GPU main memory and the compute die. HBM is GPU DRAM; SRAM provides fast on-chip storage such as caches and shared memory. The drawing simplifies actual access paths, which also include registers and caches. For t = x * 2 followed by y = t + 1, separate kernels may write the entire intermediate t and read it again. Fusion can keep temporary values on chip and produce the same result with fewer global-memory accesses. Cache hits and implementation details affect physical HBM traffic; neither two-times speedup nor a compute-bound result is guaranteed. A batch may reuse the same weight values across several tokens, increasing useful work per weight load. It can improve aggregate throughput while increasing per-request latency, so compare both. For a fixed algorithm, much of the useful arithmetic remains necessary, whereas some transfers and submission work can be removed. Compute-bound execution is a useful outcome when reached by reducing those costs, not by inserting extra arithmetic. Some well-optimized operations naturally remain bandwidth-bound. Measure end-to-end latency and throughput. The next material counts the storage needed by those weights and cached values. Illustrations: Horace He, supplied by the presenter. Fusion explanation: PyTorch Performance Tuning Guide; batching: Scaling Book inference analysis.
 
-- [Horace He](https://horace.io/brrr_intro.html)
+- [Illustration: Horace He (2022)](https://horace.io/brrr_intro.html)
 - [PyTorch performance tuning](https://docs.pytorch.org/tutorials/recipes/recipes/tuning_guide.html#fuse-operations)
-- [CUDA bandwidth guide](https://docs.nvidia.com/cuda/cuda-c-best-practices-guide/index.html#effective-bandwidth-calculation)
+- [Scaling Book: inference](https://jax-ml.github.io/scaling-book/inference/)
 
 ## 7. Weight precision and training memory
 

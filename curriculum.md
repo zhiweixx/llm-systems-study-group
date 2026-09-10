@@ -11,7 +11,7 @@ Each meeting lasts 50 minutes. Week 1 uses the current 19-slide, 30-minute prese
 - Explain CPU dispatch, asynchronous launches, kernels, blocks, and SMs.
 - Locate registers, shared memory, L1/L2 caches, and HBM on an H100.
 - Estimate weights, explicit mixed-precision Adam state, and inference KV payload.
-- Introduce compute, bandwidth, and launch limits using roofline and fusion examples.
+- Explain compute and bandwidth limits using warehouse-and-factory illustrations, fusion, and data reuse; use execution timelines to explain launch overhead.
 - Calculate MFU and distinguish token hit rate, request hit rate, and cache occupancy.
 
 **Worked questions:** inference in 24 GiB; 8B training MFU on eight H100 GPUs; shared-prefix hits and physical KV storage. Each question has an immediate solution slide.
@@ -60,4 +60,3 @@ Connect an inference engine to an online workload and explicit service objective
 ## Shared teaching model
 
 The numerical examples use a hypothetical dense model with 8 billion parameters, 32 layers, 32 query heads, 8 KV heads, and a head dimension of 128. BF16 weights and BF16 KV are the baseline. This is an explicitly specified teaching model, not an exact checkpoint specification or measured benchmark.
-
