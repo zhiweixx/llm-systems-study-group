@@ -1,0 +1,43 @@
+<h1>GPU and LLM systems</h1>
+<p class="lead">Slides, worked questions, and reference notes for a four-week study group.</p>
+<p>For readers familiar with Transformer models and PyTorch who are new to GPU systems.</p>
+
+<section aria-labelledby="week1">
+  <div class="section-heading"><h2 id="week1">Week 1: GPU memory and performance</h2><time datetime="2026-09-10">09/10/26</time></div>
+  <p>GPU execution and memory hierarchy, training and inference memory budgets, performance limits, MFU, and prefix-cache calculations.</p>
+  <p class="presentation-link"><a href="week-1/slides.html#slide-1">Present slides</a><span>19 slides · 30-minute presentation</span></p>
+  <dl class="materials">
+    <div><dt><a href="week-1/cheatsheet.html">Cheatsheet</a></dt><dd>Concepts, H100 constants, formulas, and worked calculations.</dd></div>
+    <div><dt><a href="week-1/speaker-notes.html">Speaker notes</a></dt><dd>Slide-by-slide explanations, assumptions, and suggested timing.</dd></div>
+    <div><dt><a href="week-1/slides.html" download="llm-systems-2026-09-10.html">Download HTML slides</a></dt><dd>Open the saved file in a browser to present offline.</dd></div>
+  </dl>
+  <h3>Worked questions</h3>
+  <ol class="question-list">
+    <li><a href="week-1/slides.html#slide-9">Inference in a 24 GiB budget</a><span>Weights, KV, and remaining runtime memory.</span></li>
+    <li><a href="week-1/slides.html#slide-12">Estimating model FLOPs utilization</a><span>Global token throughput and matching hardware peak.</span></li>
+    <li><a href="week-1/slides.html#slide-15">Prefix hits and shared KV</a><span>Token hit rate, request hit rate, and physical storage.</span></li>
+  </ol>
+  <p class="muted">Each question is followed by its solution. Use the arrow keys to navigate, or the Slides and Notes controls while presenting.</p>
+</section>
+
+<section aria-labelledby="course-plan">
+  <h2 id="course-plan">The four-week plan</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Week</th><th>Topic</th><th>Materials</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>GPU memory and performance</td><td><a href="week-1/slides.html#slide-1">Slides available</a></td></tr>
+      <tr><td>2</td><td>Single-GPU inference performance</td><td>Planned</td></tr>
+      <tr><td>3</td><td>Multi-GPU parallelism and sharding</td><td>Planned</td></tr>
+      <tr><td>4</td><td>LLM serving, scheduling, and KV management</td><td>Planned</td></tr>
+    </tbody>
+  </table></div>
+  <p><a href="curriculum.html">Read the curriculum and discussion prompts</a></p>
+</section>
+
+<section aria-labelledby="reading">
+  <h2 id="reading">Reading and attribution</h2>
+  <p>The study group draws on <a href="https://github.com/stanford-cs336/lectures">Stanford CS336</a>, <a href="https://horace.io/brrr_intro.html">Horace He’s performance introduction</a>, the <a href="https://nanotron-ultrascale-playbook.static.hf.space/index.html">Ultra-Scale Playbook</a>, and the <a href="https://jax-ml.github.io/scaling-book/">Scaling Book</a>.</p>
+  <p>The organization is inspired by <a href="https://github.com/CurryTang/mlphdinterview">CurryTang’s ML PhD interview notes</a>. The numerical questions here are authored teaching exercises. Hardware constants and implementation details link to their supporting sources.</p>
+  <p><a href="references.html">All references</a></p>
+</section>
+
