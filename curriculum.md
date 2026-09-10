@@ -2,19 +2,21 @@
 
 For readers who know Transformer models and PyTorch but have little GPU systems background. The course focuses on GPUs, LLM inference, and model serving, with training memory and sharding as supporting topics.
 
-Each meeting lasts 50 minutes. Week 1 uses the current 16-slide presentation: 26 minutes of planned material and 4 minutes for clarification, followed by 15 minutes of discussion and 5 minutes of buffer. Later meetings reserve at least 15 minutes for discussion. Weeks 2–4 are planned; their slides are not published yet.
+Each meeting lasts 50 minutes. Week 1 uses a 22-slide, 30-minute presentation, followed by 15 minutes of discussion and 5 minutes of buffer. Later meetings reserve at least 15 minutes for discussion. Weeks 2–4 are planned; their slides are not published yet.
 
 ## Week 1: GPU memory and performance
 
 **Meeting date: September 10, 2026.**
 
 - Explain CPU dispatch, asynchronous launches, kernels, blocks, and SMs.
-- Locate registers, shared memory, L1/L2 caches, and HBM on an H100.
-- Estimate weights, explicit mixed-precision Adam state, and inference KV payload.
-- Explain compute and bandwidth limits using warehouse-and-factory illustrations, fusion, and data reuse; use execution timelines to explain launch overhead.
+- Locate registers, shared memory, L1/L2 caches, and HBM on an H100, then use these locations to explain data movement.
+- Explain compute and bandwidth limits using warehouse-and-factory illustrations.
+- Show how lower precision, operator fusion, memory coalescing, and tiling can reduce transfer costs. Use thread/address and matrix-tile diagrams to make reuse concrete.
+- Estimate weights, one explicit mixed-precision Adam layout, and inference KV payload using decimal GB and a supplied model-specific KV cost per token.
+- Use execution timelines to identify launch overhead and validate an optimization.
 - Calculate MFU and distinguish it from active GPU time.
 
-**Worked questions:** inference in 24 GiB; 8B training MFU on eight H100 GPUs. Each question has an immediate solution slide. Week 1 retains basic within-request KV caching and its memory budget; cross-request prefix reuse and hit-rate metrics belong to Week 4.
+**Worked questions:** compare 4,000- and 8,000-token contexts in a 24 GB inference budget; estimate 8B training MFU on eight H100 GPUs. Each question has an immediate solution slide. Week 1 retains basic within-request KV caching and its memory budget; cross-request prefix reuse and hit-rate metrics belong to Week 4.
 
 **Discussion:** change context length, precision, concurrency, or measured token throughput and identify which quantities change.
 
@@ -24,7 +26,7 @@ Build on the performance vocabulary introduced in Week 1. Focus on the behavior 
 
 - Compare arithmetic intensity and latency across prefill and decode workloads.
 - Estimate compute time and memory-transfer time under explicit assumptions.
-- Explain how fusion, CUDA Graphs, and FlashAttention address different costs.
+- Build on Week 1's coalescing and tiling examples to explain how fusion, CUDA Graphs, and FlashAttention address different costs.
 - Interpret CPU/GPU timelines and design a batch-size sweep.
 
 **Discussion:** aggregate tokens/s increases with batch size, but each user's time between tokens becomes longer. Explain why both can happen and what to measure next.
@@ -62,4 +64,4 @@ Connect an inference engine to an online workload and explicit service objective
 
 ## Shared teaching model
 
-The numerical examples use a hypothetical dense model with 8 billion parameters, 32 layers, 32 query heads, 8 KV heads, and a head dimension of 128. BF16 weights and BF16 KV are the baseline. This is an explicitly specified teaching model, not an exact checkpoint specification or measured benchmark.
+Week 1 uses a hypothetical dense model with 8 billion parameters and BF16 weights. The KV-memory cost is supplied as approximately 0.131 MB per processed token across the whole model, so the audience can reason about context and concurrency without deriving attention-head layouts. The calculation reference uses 131,072 bytes per token. The Week 4 notes give the fuller architecture assumptions for the separate prefix-sharing exercise. These are teaching examples, not an exact checkpoint specification or measured benchmark.

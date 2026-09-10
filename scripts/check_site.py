@@ -53,10 +53,10 @@ def main():
     assert (OUT / "week-1/slides.html").read_bytes() == source, "Slide output differs from source"
     slide_page = pages[(OUT / "week-1/slides.html").resolve()]
     slide_ids = {i for i in slide_page.ids if re.fullmatch(r"slide-\d+", i)}
-    assert slide_ids == {f"slide-{n}" for n in range(1, 17)}
+    assert slide_ids == {f"slide-{n}" for n in range(1, 23)}
     assert "09/10/26" in source.decode()
     assert (OUT / ".nojekyll").exists()
-    print(f"Validated {len(pages)} HTML pages, {checked} local links/anchors, 16 slides, and publication boundaries.")
+    print(f"Validated {len(pages)} HTML pages, {checked} local links/anchors, 22 slides, and publication boundaries.")
 
 
 if __name__ == "__main__":

@@ -10,18 +10,18 @@ The audience knows Transformer models and PyTorch but has little GPU systems bac
 
 | Week | Topic | Status |
 | --- | --- | --- |
-| 1 | GPU memory and performance | [16-slide presentation](week-1-gpu-memory-short.html), [cheatsheet](week-1-llm-systems-cheatsheet.md), [speaker notes](week-1-short-speaker-notes.md) |
+| 1 | GPU memory and performance | [22-slide presentation](week-1-gpu-memory-short.html), [cheatsheet](week-1-llm-systems-cheatsheet.md), [speaker notes](week-1-short-speaker-notes.md) |
 | 2 | Single-GPU inference performance | Planned |
 | 3 | Multi-GPU parallelism and sharding | Planned |
 | 4 | LLM serving, scheduling, and KV management | Slides planned; [prefix-cache teaching notes](week-4-prefix-cache-notes.md) |
 
-Week 1 is dated **September 10, 2026**, with 26 minutes of planned material and 4 minutes for clarification within a 30-minute presentation. Each of Questions 1–2 has a separate solution slide immediately afterward. The prefix-cache hit-rate material and its exercise are reserved for Week 4. The full plan is in [curriculum.md](curriculum.md).
+Week 1 is dated **September 10, 2026**, with a 30-minute presentation. The story connects GPU memory traffic to lower precision, fusion, coalescing, and tiling, then applies the ideas to memory budgets and MFU. Memory calculations use decimal GB and MB. Each of Questions 1–2 has a separate solution slide immediately afterward. Prefix-cache hit rates are reserved for Week 4. The full plan is in [curriculum.md](curriculum.md).
 
 ## Presenting and sharing
 
 Open the live presentation URL in a browser. Use the arrow keys, the Slides overview, or the Notes control. The HTML file is self-contained and can also be downloaded and opened offline. Use the presentation's Print / PDF control for a printable copy.
 
-Share the live site URL for the complete materials, or a direct slide link such as `week-1/slides.html#slide-9` for a question. All files in this repository and the Pages site are public.
+Share the live site URL for the complete materials, or a direct slide link such as `week-1/slides.html#slide-15` for a question. All files in this repository and the Pages site are public.
 
 ## Updating the materials
 
