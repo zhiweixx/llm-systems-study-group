@@ -42,7 +42,7 @@ def read_data():
 def main():
     rows, numeric, relative = read_data()
     with (ROOT / "normalized.csv").open("w", newline="") as f:
-        writer = csv.writer(f)
+        writer = csv.writer(f, lineterminator="\n")
         writer.writerow(["gpu"] + [key + "_relative_to_a100" for key, *_ in SERIES])
         for i, row in enumerate(rows):
             writer.writerow([row["gpu"]] + [
@@ -122,6 +122,9 @@ def main():
     for suffix in ["png", "svg", "pdf"]:
         fig.savefig(ROOT / f"gpu-relative-growth.{suffix}", dpi=300,
                     metadata={"Creator": "Matplotlib; data and sources in accompanying README.md"})
+        if suffix == "svg":
+            svg = ROOT / "gpu-relative-growth.svg"
+            svg.write_text("\n".join(line.rstrip() for line in svg.read_text().splitlines()) + "\n")
     plt.close(fig)
     print("A100-normalized B200 endpoints:")
     for key, label, *_ in SERIES:

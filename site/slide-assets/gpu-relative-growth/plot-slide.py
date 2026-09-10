@@ -59,5 +59,7 @@ ax.annotate("B100 L2: unverified", xy=(3, 3.15), ha="center", va="center",
             bbox={"facecolor": "white", "edgecolor": "none", "pad": 2})
 fig.savefig(ROOT / "gpu-relative-growth-slide.svg",
             metadata={"Creator": "Matplotlib; values and sources in data.csv and README.md"})
+svg = ROOT / "gpu-relative-growth-slide.svg"
+svg.write_text("\n".join(line.rstrip() for line in svg.read_text().splitlines()) + "\n")
 plt.close(fig)
 print(ROOT / "gpu-relative-growth-slide.svg")
