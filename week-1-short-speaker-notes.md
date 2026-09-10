@@ -1,12 +1,12 @@
 # Week 1: 30-minute speaker notes
 
-19 slides. Questions 1–3 each have a separate solution slide immediately afterward.
+16 slides. 26 minutes of planned material, with 4 minutes for clarification within a 30-minute presentation. Questions 1–2 each have a separate solution slide immediately afterward. Prefix-cache hit rates and their worked exercise are reserved for Week 4.
 
 ## 1. GPU memory and performance for LLMs
 
 0.5 minutes
 
-Use the first 30 minutes for the material and short numerical questions. Each question has its solution on the next slide. Use the remaining meeting time to revisit changed assumptions. The numerical model is an explicitly specified dense 8B GQA teaching model.
+The material and two short numerical questions total 26 minutes, leaving 4 minutes for clarification within the 30-minute presentation. Each question has its solution on the next slide. Use the remaining meeting time to revisit changed assumptions. The numerical model is an explicitly specified dense 8B GQA teaching model.
 
 
 
@@ -120,33 +120,7 @@ Useful model arithmetic is 2.880 PFLOP/s and matching group peak is 7.912 PFLOP/
 - [NVIDIA dense compute peaks](https://github.com/NVIDIA/exemplar-performance#peak-theoretical-throughput)
 - [NVIDIA GPU-Util definition](https://docs.nvidia.com/deploy/nvidia-smi/index.html#utilization)
 
-## 14. Prefix caching across requests
-
-1.5 minutes
-
-The diagram shows one physical cached prefix referenced by several requests with private suffixes. Ordinary within-request KV caching, cross-request prefix reuse and hardware L1/L2 caching are distinct. Reuse requires matching token IDs and relevant model/cache identity, resident data and supported block granularity. Current vLLM token hit/query counters use tokens; use counter deltas from the same window and check the deployed version. Physical sharing and hit rate are different quantities. Prefix reuse mainly saves prefill, not all historical attention reads during decode.
-
-- [vLLM prefix caching](https://docs.vllm.ai/en/stable/design/prefix_caching/)
-- [vLLM metrics](https://docs.vllm.ai/en/stable/usage/metrics/#general-metrics)
-
-## 15. Question 3: prefix hits and shared KV
-
-1 minutes
-
-All prompts finish prefill sequentially. The first lookup is cold. Same model/cache identity, no eviction, no decode, matching full 16-token blocks, and all eight request states remain resident. Suffixes differ at their first token, excluding extra reusable suffix blocks. These assumptions establish the exact hit count and shared payload. Use the next slide for the solution.
-
-- [vLLM prefix caching](https://docs.vllm.ai/en/stable/design/prefix_caching/)
-
-## 16. Solution 3: cache reuse and physical storage
-
-1.5 minutes
-
-Cold token hits are 7 times 3072 = 21504, divided by 32768 queried tokens. Seven of eight requests have a hit. Count the shared prefix once and eight suffixes separately. Unique KV payload is exactly 1476395008 bytes, or 1.375 GiB. Unshared payload would be 4 GiB. Warm before all lookups gives 75% token hit rate and 100% request hit rate. The drawing is token-count proportional and excludes allocator reservations, metadata and unused capacity.
-
-- [vLLM prefix caching](https://docs.vllm.ai/en/stable/design/prefix_caching/)
-- [vLLM metrics](https://docs.vllm.ai/en/stable/usage/metrics/#general-metrics)
-
-## 17. Use timelines and measurements to find the bottleneck
+## 14. Use timelines and measurements to find the bottleneck
 
 1.5 minutes
 
@@ -156,7 +130,7 @@ These are original schematic timelines, not traces from a measured workload. The
 - [PyTorch CUDA semantics](https://docs.pytorch.org/docs/stable/notes/cuda.html#asynchronous-execution)
 - [PyTorch memory management](https://docs.pytorch.org/docs/stable/notes/cuda.html#memory-management)
 
-## 18. Memory estimates and performance diagnosis
+## 15. Memory estimates and performance diagnosis
 
 0.5 minutes
 
@@ -164,9 +138,9 @@ Use this as the closing reference. Capacity and performance are different questi
 
 
 
-## 19. Discussion and references
+## 16. Discussion and references
 
 0.5 minutes
 
-Transition at minute 30. Discussion: choose a numerical question and change one assumption. Ask whether doubled context, different weight precision, a warm prefix, or lower launch overhead changes the answer. The supporting lecture and article motivate the diagrams, while NVIDIA and PyTorch documentation supplies architecture and implementation qualifications.
+The planned material ends around minute 26. Use the remaining presentation time for clarification, then begin the discussion. Choose a numerical question and change one assumption. Ask whether doubled context, different weight precision, more concurrent requests, or lower launch overhead changes the answer. The supporting lecture and article motivate the diagrams, while NVIDIA and PyTorch documentation supplies architecture and implementation qualifications.
 

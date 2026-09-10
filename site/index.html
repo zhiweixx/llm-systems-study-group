@@ -4,8 +4,8 @@
 
 <section aria-labelledby="week1">
   <div class="section-heading"><h2 id="week1">Week 1: GPU memory and performance</h2><time datetime="2026-09-10">09/10/26</time></div>
-  <p>GPU execution and memory hierarchy, training and inference memory budgets, performance limits, MFU, and prefix-cache calculations.</p>
-  <p class="presentation-link"><a href="week-1/slides.html#slide-1">Present slides</a><span>19 slides · 30-minute presentation</span></p>
+  <p>GPU execution and memory hierarchy, training and inference memory budgets, performance limits, KV memory, and MFU.</p>
+  <p class="presentation-link"><a href="week-1/slides.html#slide-1">Present slides</a><span>16 slides · 26 minutes of material + clarification</span></p>
   <dl class="materials">
     <div><dt><a href="week-1/cheatsheet.html">Cheatsheet</a></dt><dd>Concepts, H100 constants, formulas, and worked calculations.</dd></div>
     <div><dt><a href="week-1/speaker-notes.html">Speaker notes</a></dt><dd>Slide-by-slide explanations, assumptions, and suggested timing.</dd></div>
@@ -15,7 +15,6 @@
   <ol class="question-list">
     <li><a href="week-1/slides.html#slide-9">Inference in a 24 GiB budget</a><span>Weights, KV, and remaining runtime memory.</span></li>
     <li><a href="week-1/slides.html#slide-12">Estimating model FLOPs utilization</a><span>Global token throughput and matching hardware peak.</span></li>
-    <li><a href="week-1/slides.html#slide-15">Prefix hits and shared KV</a><span>Token hit rate, request hit rate, and physical storage.</span></li>
   </ol>
   <p class="muted">Each question is followed by its solution. Use the arrow keys to navigate, or the Slides and Notes controls while presenting.</p>
 </section>
@@ -28,7 +27,7 @@
       <tr><td>1</td><td>GPU memory and performance</td><td><a href="week-1/slides.html#slide-1">Slides available</a></td></tr>
       <tr><td>2</td><td>Single-GPU inference performance</td><td>Planned</td></tr>
       <tr><td>3</td><td>Multi-GPU parallelism and sharding</td><td>Planned</td></tr>
-      <tr><td>4</td><td>LLM serving, scheduling, and KV management</td><td>Planned</td></tr>
+      <tr><td>4</td><td>LLM serving, scheduling, and KV management</td><td><a href="week-4/prefix-cache.html">Prefix-cache notes</a>; slides planned</td></tr>
     </tbody>
   </table></div>
   <p><a href="curriculum.html">Read the curriculum and discussion prompts</a></p>
@@ -40,4 +39,3 @@
   <p>The organization is inspired by <a href="https://github.com/CurryTang/mlphdinterview">CurryTang’s ML PhD interview notes</a>. The numerical questions here are authored teaching exercises. Hardware constants and implementation details link to their supporting sources.</p>
   <p><a href="references.html">All references</a></p>
 </section>
-

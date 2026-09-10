@@ -9,9 +9,9 @@
 !/week-1-gpu-memory-short.html
 !/week-1-llm-systems-cheatsheet.md
 !/week-1-short-speaker-notes.md
+!/week-4-prefix-cache-notes.md
 !/site/
 !/scripts/
 !/.github/
 **/__pycache__/
 **/.DS_Store
-

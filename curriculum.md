@@ -2,7 +2,7 @@
 
 For readers who know Transformer models and PyTorch but have little GPU systems background. The course focuses on GPUs, LLM inference, and model serving, with training memory and sharding as supporting topics.
 
-Each meeting lasts 50 minutes. Week 1 uses the current 19-slide, 30-minute presentation, followed by 15 minutes of discussion and 5 minutes of buffer. Later meetings reserve at least 15 minutes for discussion. Weeks 2–4 are planned; their slides are not published yet.
+Each meeting lasts 50 minutes. Week 1 uses the current 16-slide presentation: 26 minutes of planned material and 4 minutes for clarification, followed by 15 minutes of discussion and 5 minutes of buffer. Later meetings reserve at least 15 minutes for discussion. Weeks 2–4 are planned; their slides are not published yet.
 
 ## Week 1: GPU memory and performance
 
@@ -12,11 +12,11 @@ Each meeting lasts 50 minutes. Week 1 uses the current 19-slide, 30-minute prese
 - Locate registers, shared memory, L1/L2 caches, and HBM on an H100.
 - Estimate weights, explicit mixed-precision Adam state, and inference KV payload.
 - Explain compute and bandwidth limits using warehouse-and-factory illustrations, fusion, and data reuse; use execution timelines to explain launch overhead.
-- Calculate MFU and distinguish token hit rate, request hit rate, and cache occupancy.
+- Calculate MFU and distinguish it from active GPU time.
 
-**Worked questions:** inference in 24 GiB; 8B training MFU on eight H100 GPUs; shared-prefix hits and physical KV storage. Each question has an immediate solution slide.
+**Worked questions:** inference in 24 GiB; 8B training MFU on eight H100 GPUs. Each question has an immediate solution slide. Week 1 retains basic within-request KV caching and its memory budget; cross-request prefix reuse and hit-rate metrics belong to Week 4.
 
-**Discussion:** change one assumption—context length, precision, concurrency, or prefix warmth—and identify which quantities change.
+**Discussion:** change context length, precision, concurrency, or measured token throughput and identify which quantities change.
 
 ## Week 2: Single-GPU inference performance
 
@@ -51,7 +51,10 @@ Connect an inference engine to an online workload and explicit service objective
 - Define TTFT, TPOT/ITL, throughput, tail latency, and SLOs.
 - Compare static batching, continuous batching, and chunked prefill.
 - Explain paged KV allocation, physical prefix sharing, and admission control.
+- Distinguish token hit rate, request hit rate, and KV-pool occupancy, including cold/warm cache state and eviction.
 - Design a load test varying request rate and prompt/output lengths.
+
+**Worked exercise:** shared-prefix hits and physical KV storage, moved from Week 1. The [prefix-cache teaching notes](https://zhiweixx.github.io/llm-systems-study-group/week-4/prefix-cache.html) preserve the explanation, assumptions, question, and solution for this week.
 
 **Discussion:** design an 8B chat service with four GPUs, mixed prompt lengths, and repeated system prompts. Specify model placement, KV budget, scheduling, and experiments that test the proposed latency targets.
 

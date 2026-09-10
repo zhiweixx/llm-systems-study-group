@@ -1,6 +1,6 @@
 # Week 1 - LLM Systems Cheatsheet
 
-Extended reference notes accompanying the 19-slide Week 1 presentation dated September 10, 2026. These notes retain additional detail from the original longer deck. Hardware example: NVIDIA H100 SXM 80 GB. Model example: an explicitly specified dense 8B GQA model, not an exact checkpoint.
+Extended reference notes accompanying the Week 1 presentation. These notes retain additional detail from the original longer deck. Hardware example: NVIDIA H100 SXM 80 GB. Model example: an explicitly specified dense 8B GQA model, not an exact checkpoint.
 
 ## 1. GPU execution & memory hardware
 
@@ -98,7 +98,7 @@ Sources: [CS336: systems and memory](https://github.com/stanford-cs336/lectures/
 
 One teaching model throughout - this is not an exact checkpoint specification.
 
-**Model:** P = 8B; L = 32 layers; 32 query heads; h_KV = 8 KV heads; d_h = 128 values/head; BF16 weights and BF16 KV (2 bytes/value). Base case: B = 8 active requests, S = 4096 cached positions/request. Full attention; no prefix sharing or sliding window.
+**Model:** P = 8B; L = 32 layers; 32 query heads; h_KV = 8 KV heads; d_h = 128 values/head; BF16 weights and BF16 KV (2 bytes/value). Base case: B = 8 active requests, S = 4096 cached positions/request. Full attention; independent per-request KV storage and no sliding window.
 
 ### 7  What is cached, and when?
 
@@ -146,7 +146,7 @@ Sources: [Hugging Face: KV cache](https://huggingface.co/docs/transformers/main/
 
 ---
 
-## 4. MFU & cache metrics
+## 4. Model FLOPs utilization
 
 Define the numerator, denominator and measurement window before calculating.
 
@@ -174,50 +174,15 @@ Dense training approximation: MFU = (6 x P x R) / (N_GPU x F_peak)
 
 **GPU-Util is different:** it measures the fraction of a sampling interval with one or more kernels running, not useful FLOPs / peak. 95% GPU-Util can coexist with 36.4% MFU. Low decode MFU can reflect a bandwidth limit; MFU alone does not diagnose the bottleneck or service quality.
 
-### 12  Three different meanings of "cache"
-
-| Concept | What is reused? | Metric / accounting |
-| --- | --- | --- |
-| Per-request KV cache | Past K/V within autoregressive generation | Payload from token count and architecture |
-| Prefix cache | K/V for an identical token prefix across requests | Reused prompt tokens / queried prompt tokens |
-| Hardware L1 / L2 cache | Memory data handled by GPU cache hardware | Cache accesses/hits, separate from prefix hits |
-
-```text
-Token hit rate = delta(prefix_cache_hits) / delta(prefix_cache_queries)
-Request hit rate = requests with any prefix hit / queried requests
-```
-
-**Use counter deltas from the same time window.** vLLM prefix hit/query counters count tokens; verify the deployed version. Request hit rate uses requests. **KV pool occupancy** is used blocks/capacity, a third quantity. GPU type and model size alone cannot determine a prefix hit rate.
-
-**Reuse requires** matching token IDs and model/cache identity, resident data and supported block granularity. Arrival order, warm/cold state, eviction and routing matter. Prefix caching saves prefill work; 60% hits does not mean 60% less end-to-end latency.
-
-Sources: [PaLM: MFU, Appendix B](https://jmlr.org/papers/volume24/22-1144/22-1144.pdf#page=90), [NVIDIA dense compute peaks](https://github.com/NVIDIA/exemplar-performance#peak-theoretical-throughput), [NVIDIA GPU utilization definition](https://docs.nvidia.com/deploy/nvidia-smi/index.html#utilization), [vLLM cache metrics](https://docs.vllm.ai/en/stable/usage/metrics/#general-metrics), [vLLM prefix-cache design](https://docs.vllm.ai/en/stable/design/prefix_caching/), [vLLM prefix-cache limits](https://docs.vllm.ai/en/stable/features/automatic_prefix_caching/#limits).
+Sources: [PaLM: MFU, Appendix B](https://jmlr.org/papers/volume24/22-1144/22-1144.pdf#page=90), [NVIDIA dense compute peaks](https://github.com/NVIDIA/exemplar-performance#peak-theoretical-throughput), [NVIDIA GPU utilization definition](https://docs.nvidia.com/deploy/nvidia-smi/index.html#utilization).
 
 ---
 
-## 5. Worked cache & bandwidth questions
+## 5. Worked bandwidth question
 
-Count tokens for reuse; count bytes for traffic. State the physical sharing assumptions.
+Count bytes transferred and state which accesses reach HBM.
 
-### 13  Question 3: cold prefix cache, eight prompts
-
-**Setup:** eight requests each have 4096 prompt tokens: an identical 3072-token prefix and a distinct 1024-token suffix (different from its first token). Prefills finish sequentially. The first lookup is cold; no eviction occurs. Retain all eight request states and exclude decode. Same model/cache identity; 16-token blocks; matching blocks are stored once and shared by reference.
-
-| Quantity | Calculation | Result |
-| --- | --- | --- |
-| Token hits | 0 + 7 x 3072 | 21,504 tokens |
-| Token queries | 8 x 4096 | 32,768 tokens |
-| Token hit rate | 21,504 / 32,768 | 65.625% |
-| Request hit rate | 7 / 8 | 87.5% |
-| Unique cached positions | 3072 + 8 x 1024 | 11,264 |
-| Shared KV payload | 11,264 x 128 KiB | 1.375 GiB |
-| Without physical sharing | 8 x 4096 x 128 KiB | 4 GiB |
-
-**Warm-cache variant:** if the prefix is resident before all eight lookups, the token hit rate is 3072 / 4096 = **75%**, and the request hit rate is **100%**. The final unique payload is still **1.375 GiB** under the same sharing assumptions.
-
-The shared payload excludes metadata, unused reserved blocks and later decode growth. Identical prompt text alone is insufficient if tokenization or preceding tokens differ. Hit rate describes reuse events; physical KV sharing describes stored bytes. One does not uniquely determine the other.
-
-### 14  Optional challenge: fusion and HBM traffic
+### 12  Optional challenge: fusion and HBM traffic
 
 **Fusion** combines operations into one kernel while preserving required numerical semantics. Compare `t = x * 2; y = t + 1` with a fused kernel. Let N = 2^26 BF16 elements. Each tensor contains N x 2 bytes = **128 MiB**.
 
@@ -238,7 +203,7 @@ Traffic-model time bound = modeled HBM bytes / peak HBM bytes per second
 
 **Tiling** is a related reuse technique: load a small matrix tile into SMEM, reuse it cooperatively, and keep working accumulators in registers. It reduces repeated distant accesses; it does not require the entire matrix to fit on chip.
 
-Sources: [vLLM prefix-cache design](https://docs.vllm.ai/en/stable/design/prefix_caching/), [vLLM cache metrics](https://docs.vllm.ai/en/stable/usage/metrics/#general-metrics), [vLLM prefix-cache limits](https://docs.vllm.ai/en/stable/features/automatic_prefix_caching/#limits), [CUDA bandwidth guide](https://docs.nvidia.com/cuda/cuda-c-best-practices-guide/index.html#bandwidth), [H100 specifications](https://www.nvidia.com/en-us/data-center/h100/), [CUDA programming model](https://docs.nvidia.com/cuda/cuda-programming-guide/01-introduction/programming-model.html).
+Sources: [CUDA bandwidth guide](https://docs.nvidia.com/cuda/cuda-c-best-practices-guide/index.html#bandwidth), [H100 specifications](https://www.nvidia.com/en-us/data-center/h100/), [CUDA programming model](https://docs.nvidia.com/cuda/cuda-programming-guide/01-introduction/programming-model.html).
 
 ---
 
@@ -246,7 +211,7 @@ Sources: [vLLM prefix-cache design](https://docs.vllm.ai/en/stable/design/prefix
 
 Use estimates to explain the budget, then validate the workload that will actually run.
 
-### 15  PyTorch memory measurements
+### 13  PyTorch memory measurements
 
 | API / setting | What it means |
 | --- | --- |
@@ -271,7 +236,7 @@ The workload function is a placeholder for your prefill/decode code. Resetting s
 
 **Timing:** a CPU timer around an asynchronous launch may only measure submission. Use CUDA events or synchronize the boundaries of a warmed-up measurement. Measure representative sequence lengths, concurrency and a complete training step when estimating training peak.
 
-### 16  What changes when you change the workload?
+### 14  What changes when you change the workload?
 
 | Change (hold other choices fixed) | Direct effect |
 | --- | --- |
@@ -280,7 +245,6 @@ The workload function is a placeholder for your prefill/decode code. Resetting s
 | BF16 KV -> 1-byte KV | Ideal KV bytes / 2; weights unchanged; support/metadata matter |
 | 32 KV heads -> 8 KV heads | KV bytes / 4 at fixed head dimension and KV dtype |
 | Activation checkpointing | Fewer saved activations; more recomputation |
-| Prefix block sharing | Fewer unique KV blocks when prefixes match and remain cached |
 | Sharding / offload / adapters | Changes state placement or trainable subset; redo the budget |
 
 Sources: [PyTorch memory management](https://docs.pytorch.org/docs/stable/notes/cuda.html#memory-management), [PyTorch CUDA semantics](https://docs.pytorch.org/docs/stable/notes/cuda.html#asynchronous-execution), [CS336: systems and memory](https://github.com/stanford-cs336/lectures/blob/main/lecture_02.py), [Ultra-Scale Playbook](https://nanotron-ultrascale-playbook.static.hf.space/index.html).
@@ -307,27 +271,26 @@ The one-page recap  |  Keep units, scope and assumptions visible.
 Weights:    M_weights = P x b_w
 Training:   M_states = 16P bytes  [only the stated Adam layout]
 KV/token:   m_token = 2 x L x h_KV x d_h x b_KV
-KV total:   M_KV = m_token x sum_i(S_i)  [no physical prefix sharing]
+KV total:   M_KV = m_token x sum_i(S_i)  [independent per-request storage]
 Fit:        weights + KV + all other live allocations <= budget
 Dense training MFU (approx): (6 x P x global tokens/s) / (N_GPU x F_peak)
-Token hits: reused prompt tokens / queried prompt tokens
 Time bound: modeled transferred bytes / peak bytes per second
 ```
 
 **Symbols:** P = stored parameter count; b_w / b_KV = bytes per weight / KV value; L = layers; h_KV = KV heads; d_h = values/head; S_i = currently cached positions for request i; N_GPU = GPU count; F_peak = matching FLOP/s per GPU. Equations count ideal payload unless stated otherwise.
 
-### 17  A reliable interview answer in five steps
+### 15  A reliable interview answer in five steps
 
-**1. State the target.** Weight storage, inference peak, training peak, token throughput or hit rate?
-**2. State assumptions.** Exact GPU variant, units, model architecture, precision for each state, concurrency/context; cache warmness and sharing if relevant.
+**1. State the target.** Weight storage, inference peak, training peak or token throughput?
+**2. State assumptions.** Exact GPU variant, units, model architecture, precision for each state and concurrency/context.
 **3. Write the equation with units.** Separate hardware constants, chosen inputs and measured quantities.
 **4. Calculate the known payload.** Add a stated reserve or identify what needs measurement. Round only at the end.
 **5. Explain the limit.** A payload fit is not a peak-memory guarantee; a theoretical traffic time is not a benchmark; a utilization percentage is not a latency prediction.
 
-**Numbers to remember for this teaching model:** BF16 weights **14.90 GiB**; assumed Adam states **119.21 GiB**; KV **128 KiB/token**; 8 x 4096 BF16 KV **4 GiB**; base inference payload **18.90 GiB**; example MFU **36.4%**; cold prefix hits **65.625%**.
+**Numbers to remember for this teaching model:** BF16 weights **14.90 GiB**; assumed Adam states **119.21 GiB**; KV **128 KiB/token**; 8 x 4096 BF16 KV **4 GiB**; base inference payload **18.90 GiB**; example MFU **36.4%**.
 
 **Scope:** covers the Week 1 talk and additional reference material for discussion. Worked questions use authored teaching numbers, not verified verbatim frontier-lab interview questions. Each section links to primary documentation; hardware constants and implementation details must be checked for other variants or software versions.
 
-Sources: [CS336: systems and memory](https://github.com/stanford-cs336/lectures/blob/main/lecture_02.py), [Hopper tuning guide](https://docs.nvidia.com/cuda/hopper-tuning-guide/index.html), [PaLM: MFU, Appendix B](https://jmlr.org/papers/volume24/22-1144/22-1144.pdf#page=90), [vLLM cache metrics](https://docs.vllm.ai/en/stable/usage/metrics/#general-metrics).
+Sources: [CS336: systems and memory](https://github.com/stanford-cs336/lectures/blob/main/lecture_02.py), [Hopper tuning guide](https://docs.nvidia.com/cuda/hopper-tuning-guide/index.html), [PaLM: MFU, Appendix B](https://jmlr.org/papers/volume24/22-1144/22-1144.pdf#page=90).
 
 ---

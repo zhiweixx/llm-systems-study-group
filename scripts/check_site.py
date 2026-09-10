@@ -28,7 +28,7 @@ class Page(HTMLParser):
 
 def main():
     pages = {p.resolve(): Page(p) for p in OUT.rglob("*.html")}
-    assert len(pages) == 6, "Expected overview, curriculum, references, cheatsheet, notes, and slides"
+    assert len(pages) == 7, "Expected course pages, Week 1 materials, and Week 4 prefix-cache notes"
     checked = 0
     for path, page in pages.items():
         assert page.title, f"Missing page title: {path.name}"
@@ -52,12 +52,12 @@ def main():
     source = (ROOT / "week-1-gpu-memory-short.html").read_bytes()
     assert (OUT / "week-1/slides.html").read_bytes() == source, "Slide output differs from source"
     slide_page = pages[(OUT / "week-1/slides.html").resolve()]
-    assert all(f"slide-{n}" in slide_page.ids for n in range(1, 20))
+    slide_ids = {i for i in slide_page.ids if re.fullmatch(r"slide-\d+", i)}
+    assert slide_ids == {f"slide-{n}" for n in range(1, 17)}
     assert "09/10/26" in source.decode()
     assert (OUT / ".nojekyll").exists()
-    print(f"Validated {len(pages)} HTML pages, {checked} local links/anchors, 19 slides, and publication boundaries.")
+    print(f"Validated {len(pages)} HTML pages, {checked} local links/anchors, 16 slides, and publication boundaries.")
 
 
 if __name__ == "__main__":
     main()
-

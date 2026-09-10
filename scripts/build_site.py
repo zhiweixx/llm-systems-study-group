@@ -46,6 +46,7 @@ def main():
     document("resources.md", "References", "references.html")
     document("week-1-llm-systems-cheatsheet.md", "Week 1 cheatsheet", "week-1/cheatsheet.html", "../")
     document("week-1-short-speaker-notes.md", "Week 1 speaker notes", "week-1/speaker-notes.html", "../")
+    document("week-4-prefix-cache-notes.md", "Week 4 prefix-cache notes", "week-4/prefix-cache.html", "../")
     shutil.copy2(ROOT / "week-1-gpu-memory-short.html", OUT / "week-1/slides.html")
     (OUT / ".nojekyll").touch()
     print(f"Built {len(list(OUT.rglob('*.html')))} HTML pages in _site/")
@@ -53,4 +54,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

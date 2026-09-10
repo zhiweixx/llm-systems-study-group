@@ -10,12 +10,12 @@ The audience knows Transformer models and PyTorch but has little GPU systems bac
 
 | Week | Topic | Status |
 | --- | --- | --- |
-| 1 | GPU memory and performance | [19-slide presentation](week-1-gpu-memory-short.html), [cheatsheet](week-1-llm-systems-cheatsheet.md), [speaker notes](week-1-short-speaker-notes.md) |
+| 1 | GPU memory and performance | [16-slide presentation](week-1-gpu-memory-short.html), [cheatsheet](week-1-llm-systems-cheatsheet.md), [speaker notes](week-1-short-speaker-notes.md) |
 | 2 | Single-GPU inference performance | Planned |
 | 3 | Multi-GPU parallelism and sharding | Planned |
-| 4 | LLM serving, scheduling, and KV management | Planned |
+| 4 | LLM serving, scheduling, and KV management | Slides planned; [prefix-cache teaching notes](week-4-prefix-cache-notes.md) |
 
-Week 1 is dated **September 10, 2026**, with a 30-minute pacing plan. Each of Questions 1–3 has a separate solution slide immediately afterward. The full plan is in [curriculum.md](curriculum.md).
+Week 1 is dated **September 10, 2026**, with 26 minutes of planned material and 4 minutes for clarification within a 30-minute presentation. Each of Questions 1–2 has a separate solution slide immediately afterward. The prefix-cache hit-rate material and its exercise are reserved for Week 4. The full plan is in [curriculum.md](curriculum.md).
 
 ## Presenting and sharing
 
@@ -49,4 +49,3 @@ The generated `_site/` directory is ignored by Git. The build uses one pinned Ma
 See [references.md](resources.md) for readings and attribution. The organization is inspired by [CurryTang/mlphdinterview](https://github.com/CurryTang/mlphdinterview); the slides and numerical exercises here were prepared for this study group. These are authored teaching questions, not verified verbatim questions from named employers.
 
 Corrections and additions are welcome through issues or pull requests. Please include units, assumptions, and a primary source for factual changes. See [CONTRIBUTING.md](CONTRIBUTING.md).
-
