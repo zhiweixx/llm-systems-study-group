@@ -1,0 +1,6 @@
+gpu,bf16_fp16_dense_tflops,hbm_bandwidth_tb_s,hbm_capacity_gb,l2_capacity_mb,l1_shared_pool_kb_per_sm,qualification
+A100,312,2.039,80,40,192,A100 80GB SXM
+H100,989,3.35,80,50,256,H100 SXM
+H200,989,4.8,141,50,256,H200 SXM
+B100,1750,8,192,,256,Preliminary announced specifications; L2 unverified; L1 pool is an architecture-level reference
+B200,2250,8,180,126,256,B200 SXM/HGX; 180 GB capacity per NVIDIA HGX reference architecture; rounded peak compute and bandwidth

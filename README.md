@@ -10,7 +10,7 @@ The audience knows Transformer models and PyTorch but has little GPU systems bac
 
 | Week | Topic | Status |
 | --- | --- | --- |
-| 1 | GPU memory and performance | [23-slide presentation](week-1-gpu-memory-short.html), [cheatsheet](week-1-llm-systems-cheatsheet.md), [speaker notes](week-1-short-speaker-notes.md) |
+| 1 | GPU memory and performance | [24-slide presentation](week-1-gpu-memory-short.html), [cheatsheet](week-1-llm-systems-cheatsheet.md), [speaker notes](week-1-short-speaker-notes.md) |
 | 2 | Single-GPU inference performance | Planned |
 | 3 | Multi-GPU parallelism and sharding | Planned |
 | 4 | LLM serving, scheduling, and KV management | Slides planned; [prefix-cache teaching notes](week-4-prefix-cache-notes.md) |
@@ -21,9 +21,11 @@ Week 1 is dated **September 10, 2026**, with a 30-minute presentation. The story
 
 Open the live presentation URL in a browser. Use the arrow keys, the Slides overview, or the Notes control. The HTML file is self-contained and can also be downloaded and opened offline. Use the presentation's Print / PDF control for a printable copy.
 
-Slide 13 includes an interactive tiling example. Its Previous step and Next step buttons show input loading, partial-sum accumulation, and the final write to HBM. Print / PDF shows the completed example.
+Slide 6 compares A100-normalized compute, HBM bandwidth, and memory capacities to motivate data reuse. Its [data, source notes, and plotting code](site/slide-assets/gpu-relative-growth/) are included in the repository.
 
-Share the live site URL for the complete materials, or a direct slide link such as `week-1/slides.html#slide-16` for a question. All files in this repository and the Pages site are public.
+Slide 14 includes an interactive tiling example. Its Previous step and Next step buttons show input loading, partial-sum accumulation, and the final write to HBM. Print / PDF shows the completed example.
+
+Share the live site URL for the complete materials, or a direct slide link such as `week-1/slides.html#slide-17` for a question. All files in this repository and the Pages site are public.
 
 ## Updating the materials
 

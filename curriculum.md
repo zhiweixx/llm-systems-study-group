@@ -2,7 +2,7 @@
 
 For readers who know Transformer models and PyTorch but have little GPU systems background. The course focuses on GPUs, LLM inference, and model serving, with training memory and sharding as supporting topics.
 
-Each meeting lasts 50 minutes. Week 1 uses a 23-slide, 30-minute presentation, followed by 15 minutes of discussion and 5 minutes of buffer. Later meetings reserve at least 15 minutes for discussion. Weeks 2–4 are planned; their slides are not published yet.
+Each meeting lasts 50 minutes. Week 1 uses a 24-slide, 30-minute presentation, followed by 15 minutes of discussion and 5 minutes of buffer. Later meetings reserve at least 15 minutes for discussion. Weeks 2–4 are planned; their slides are not published yet.
 
 ## Week 1: GPU memory and performance
 

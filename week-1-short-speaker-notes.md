@@ -1,6 +1,6 @@
 # Week 1: 30-minute speaker notes
 
-23 slides. 30 minutes of planned material. Questions 1–2 each have a separate solution slide immediately afterward. Prefix-cache hit rates and their worked exercise are reserved for Week 4.
+24 slides. 30 minutes of planned material. Questions 1–2 each have a separate solution slide immediately afterward. Prefix-cache hit rates and their worked exercise are reserved for Week 4.
 
 ## 1. GPU performance and memory for LLMs
 
@@ -21,7 +21,7 @@ x already resides on the GPU. CPU code selects a backend/implementation and subm
 
 ## 3. GPU execution and memory model
 
-2 minutes
+1.5 minutes
 
 Read the left panel as the logical programming model and the right panel as the hardware that executes it. A kernel launch creates a grid of blocks. Threads within a block cooperate using shared memory; warps group 32 threads. SM means Streaming Multiprocessor. A block executes on one SM, while an SM can host several resident blocks if registers, shared memory and other limits allow. The scheduling arrow illustrates the mapping, not a permanent one-to-one pairing. Each SM contains schedulers and compute units, a physical register file and a combined physical L1/shared-memory resource. Registers hold logically private thread values. L1 is hardware-managed caching; shared memory is a kernel-managed workspace. Device-wide global tensors normally reside in HBM, with L2 shared across SMs. HBM is stacked DRAM beside the compute die in the GPU package. Global memory is not exclusively owned by one grid and may survive kernel completion. CUDA local memory, omitted here, is thread-private device-memory-backed storage, for example register spills; it is not another name for on-chip SRAM. Cluster-level distributed shared memory is outside this introductory model. Native schematic adapted from CS336 Lecture 5, pages 10-12, and the NVIDIA CUDA programming guide.
 
@@ -47,16 +47,26 @@ Read the supplied Horace He illustration as a warehouse supplying a factory and 
 - [Illustration: Horace He (2022)](https://horace.io/brrr_intro.html)
 - [NVIDIA performance guide](https://docs.nvidia.com/deeplearning/performance/dl-performance-gpu-background/index.html#understanding-performance)
 
-## 6. Four ways to spend less time moving data
+## 6. Compute has grown faster than HBM bandwidth
 
 1 minute
 
-Keep the factory illustration visible while introducing the next four techniques. Lower precision reduces bytes per value. Fusion removes intermediate global-memory traffic between operators. Coalescing packs useful accesses into fewer memory transactions. Tiling reuses a small working set near compute. The categories can overlap in an implementation. The goal is faster useful output, not forcing every workload to become compute-bound. Extra arithmetic, launch overhead, dependencies and finite on-chip resources still matter. The drawing simplifies the path through caches and registers. HBM is GPU DRAM, and SRAM implements on-chip caches and shared memory.
+Use this plot as the bridge from the warehouse/factory analogy to the optimization techniques. Read only the endpoints aloud: from the selected A100 to B200 configurations, peak dense BF16/FP16 Tensor Core compute increases 7.21 times, but HBM bandwidth increases 3.92 times. All five curves are divided by their own A100 value and start at 1.0; the horizontal axis lists GPU models, not equally spaced years. This is a specification comparison, not measured application speed. To keep the arithmetic units supplied at peak, the ratio of useful computation to transferred bytes would need to rise by about 7.21/3.92 = 1.84 times. Reusing data near compute helps meet that demand; faster compute alone does little for a bandwidth-limited workload. Do not interpret extra memory capacity as extra bandwidth. HBM and L2 capacities are per whole GPU; L1 is the combined L1/shared-memory/texture pool per SM, not aggregate L1 across the GPU. B100 values are preliminary, and its L1 uses the Blackwell architecture value; no B100 L2 value was verified, so that curve has a gap. B200 uses the selected HGX 180 GB configuration and rounded peaks of 2.25 PFLOP/s and 8 TB/s; other NVIDIA references give different configurations or rounded values. The B100-to-B200 HBM decrease reflects the preliminary versus selected SKU figures, not a general regression. H100 to H200 illustrates that compute does not always grow faster: their stated BF16 compute is unchanged while HBM grows. Detailed raw values, source links, and reproducible plotting code are in the linked specification notes. Transition: the next slide shows four ways to reduce data movement or improve reuse.
+
+- [Data and specification notes](https://github.com/zhiweixx/llm-systems-study-group/tree/main/site/slide-assets/gpu-relative-growth)
+- [NVIDIA A100](https://www.nvidia.com/en-us/data-center/a100/)
+- [NVIDIA Blackwell tuning guide](https://docs.nvidia.com/cuda/blackwell-tuning-guide/index.html)
+
+## 7. Four ways to spend less time moving data
+
+0.5 minutes
+
+Use this as a quick roadmap following the hardware-scaling comparison. Lower precision reduces bytes per value. Fusion removes intermediate global-memory traffic between operators. Coalescing packs useful accesses into fewer memory transactions. Tiling reuses a small working set near compute. The categories can overlap in an implementation. The goal is faster useful output, not forcing every workload to become compute-bound. Extra arithmetic, launch overhead, dependencies and finite on-chip resources still matter. The drawing simplifies the path through caches and registers. HBM is GPU DRAM, and SRAM implements on-chip caches and shared memory.
 
 - [Illustration: Horace He (2022)](https://horace.io/brrr_intro.html)
 - [CS336 Lecture 5: GPU optimization](https://raw.githubusercontent.com/stanford-cs336/lectures/main/lecture_05.pdf#page=27)
 
-## 7. Lower precision moves fewer bytes per value
+## 8. Lower precision moves fewer bytes per value
 
 1.5 minutes
 
@@ -65,7 +75,7 @@ This is a storage and traffic comparison for the same number of values. FP32 use
 - [NVIDIA mixed precision](https://docs.nvidia.com/deeplearning/performance/mixed-precision-training/index.html)
 - [CS336 Lecture 5: GPU optimization](https://raw.githubusercontent.com/stanford-cs336/lectures/main/lecture_05.pdf#page=27)
 
-## 8. Fusion avoids a round trip for an intermediate tensor
+## 9. Fusion avoids a round trip for an intermediate tensor
 
 1.5 minutes
 
@@ -74,7 +84,7 @@ Compare t = x * 2 followed by y = t + 1. Two separate GPU kernels logically read
 - [PyTorch performance tuning](https://docs.pytorch.org/tutorials/recipes/recipes/tuning_guide.html#fuse-operations)
 - [Horace He](https://horace.io/brrr_intro.html)
 
-## 9. Coalescing: neighboring threads read nearby values
+## 10. Coalescing: neighboring threads read nearby values
 
 2 minutes
 
@@ -83,7 +93,7 @@ Each thread requests one value in one load instruction. Dark cells mark requeste
 - [CS336 Lecture 5, pp. 37–39](https://raw.githubusercontent.com/stanford-cs336/lectures/main/lecture_05.pdf#page=37)
 - [CUDA memory coalescing](https://docs.nvidia.com/cuda/cuda-c-best-practices-guide/index.html#coalesced-access-to-global-memory)
 
-## 10. Tensor layout determines which addresses are nearby
+## 11. Tensor layout determines which addresses are nearby
 
 1 minute
 
@@ -92,7 +102,7 @@ Both panels use the same contiguous row-major 4 by 4 array. Cell numbers are ele
 - [CS336 Lecture 5, pp. 37–39](https://raw.githubusercontent.com/stanford-cs336/lectures/main/lecture_05.pdf#page=37)
 - [CUDA memory coalescing](https://docs.nvidia.com/cuda/cuda-c-best-practices-guide/index.html#coalesced-access-to-global-memory)
 
-## 11. Tiling: load a small region, then reuse it
+## 12. Tiling: load a small region, then reuse it
 
 1 minute
 
@@ -101,7 +111,7 @@ Allow 1 minute. Tiling divides a large matrix multiplication C = A × B into sma
 - [CS336 Lecture 5, pp. 40–43](https://raw.githubusercontent.com/stanford-cs336/lectures/main/lecture_05.pdf#page=40)
 - [CUDA shared-memory matrix multiply](https://docs.nvidia.com/cuda/cuda-c-best-practices-guide/index.html#shared-memory-in-matrix-multiplication-c-ab)
 
-## 12. Tiling reuses inputs across an output tile
+## 13. Tiling reuses inputs across an output tile
 
 1.5 minutes
 
@@ -110,7 +120,7 @@ Allow 1.5 minutes. A and B are both 4×4, and this example computes only C[0:2,0
 - [CS336 Lecture 5, pp. 40–43](https://raw.githubusercontent.com/stanford-cs336/lectures/main/lecture_05.pdf#page=40)
 - [CUDA shared-memory matrix multiply](https://docs.nvidia.com/cuda/cuda-c-best-practices-guide/index.html#shared-memory-in-matrix-multiplication-c-ab)
 
-## 13. Tiling: a worked example
+## 14. Tiling: a worked example
 
 1.5 minutes
 
@@ -118,7 +128,7 @@ Allow 1.5 minutes. Use Previous step and Next step on this slide to walk through
 
 - [CUDA shared-memory matrix multiply](https://docs.nvidia.com/cuda/cuda-c-best-practices-guide/index.html#shared-memory-in-matrix-multiplication-c-ab)
 
-## 14. Training stores much more than the weights
+## 15. Training stores much more than the weights
 
 1.5 minutes
 
@@ -127,7 +137,7 @@ Use one explicitly specified mixed-precision Adam layout: BF16 weights, BF16 gra
 - [Ultra-Scale Playbook](https://nanotron-ultrascale-playbook.static.hf.space/index.html)
 - [NVIDIA mixed precision](https://docs.nvidia.com/deeplearning/performance/mixed-precision-training/index.html)
 
-## 15. The KV cache grows as generation continues
+## 16. The KV cache grows as generation continues
 
 2 minutes
 
@@ -135,7 +145,7 @@ Prefill processes the prompt and creates cached key/value vectors for its proces
 
 - [Hugging Face KV cache](https://huggingface.co/docs/transformers/main/cache_explanation)
 
-## 16. Question 1: what fits in a 24 GB memory budget?
+## 17. Question 1: what fits in a 24 GB memory budget?
 
 1.5 minutes
 
@@ -143,7 +153,7 @@ Use a decimal 24 GB memory budget. Both cases use the same dense eight-billion-p
 
 
 
-## 17. Solution 1: doubling context can exhaust the budget
+## 18. Solution 1: doubling context can exhaust the budget
 
 1.5 minutes
 
@@ -151,7 +161,7 @@ Weights are eight billion times two bytes, or 16 GB. With a reference rate of 13
 
 
 
-## 18. Use timelines and measurements to find the bottleneck
+## 19. Use timelines and measurements to find the bottleneck
 
 1.5 minutes
 
@@ -161,7 +171,7 @@ These are original schematic timelines, not traces from a measured workload. The
 - [PyTorch CUDA semantics](https://docs.pytorch.org/docs/stable/notes/cuda.html#asynchronous-execution)
 - [PyTorch memory management](https://docs.pytorch.org/docs/stable/notes/cuda.html#memory-management)
 
-## 19. MFU measures useful arithmetic against a compute peak
+## 20. MFU measures useful arithmetic against a compute peak
 
 1 minute
 
@@ -171,7 +181,7 @@ MFU is a model-level measure. Divide useful model FLOPs per second by the matchi
 - [NVIDIA dense compute peaks](https://github.com/NVIDIA/exemplar-performance#peak-theoretical-throughput)
 - [NVIDIA GPU-Util definition](https://docs.nvidia.com/deploy/nvidia-smi/index.html#utilization)
 
-## 20. Question 2: estimating MFU
+## 21. Question 2: estimating MFU
 
 1 minute
 
@@ -180,7 +190,7 @@ Use the next slide for the solution. The throughput is global across the GPU gro
 - [PaLM, Appendix B](https://jmlr.org/papers/volume24/22-1144/22-1144.pdf#page=90)
 - [NVIDIA dense compute peaks](https://github.com/NVIDIA/exemplar-performance#peak-theoretical-throughput)
 
-## 21. Solution 2: 36.4% MFU
+## 22. Solution 2: 36.4% MFU
 
 1.5 minutes
 
@@ -190,7 +200,7 @@ Useful model arithmetic is 2.880 PFLOP/s and matching group peak is 7.912 PFLOP/
 - [NVIDIA dense compute peaks](https://github.com/NVIDIA/exemplar-performance#peak-theoretical-throughput)
 - [NVIDIA GPU-Util definition](https://docs.nvidia.com/deploy/nvidia-smi/index.html#utilization)
 
-## 22. Match the optimization to the bottleneck
+## 23. Match the optimization to the bottleneck
 
 0.5 minutes
 
@@ -198,7 +208,7 @@ Close the story by tying each technique to the cost it changes. Lower precision 
 
 
 
-## 23. Discussion and further reading
+## 24. Discussion and further reading
 
 0.5 minutes
 
