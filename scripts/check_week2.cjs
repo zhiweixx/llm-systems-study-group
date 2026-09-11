@@ -1,0 +1,81 @@
+/* Browser QA for the standalone Week 2 deck. Requires Playwright + Chrome. */
+const fs=require('node:fs/promises');
+const path=require('node:path');
+const assert=require('node:assert/strict');
+const {chromium}=require('playwright');
+const root=path.resolve(__dirname,'..'),out=path.join(root,'.build/week2-qa');
+(async()=>{
+  await fs.mkdir(out,{recursive:true});
+  const browser=await chromium.launch({channel:'chrome',headless:true});
+  const page=await browser.newPage({viewport:{width:1600,height:960}});
+  const errors=[],requests=[];page.on('pageerror',e=>errors.push(e.message));
+  page.on('request',r=>{if(/^https?:/.test(r.url()))requests.push(r.url());});
+  await page.goto('file://'+path.join(root,'week-2-inference.html'));
+  const settle=()=>page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
+  await settle();
+  const slides=await page.locator('.slide').evaluateAll(ss=>ss.map(s=>({id:s.id,title:s.dataset.title,minutes:Number(s.dataset.minutes)})));
+  assert.equal(slides.length,18);assert.equal(slides.reduce((n,s)=>n+s.minutes,0),30);
+  const issues=[];
+  async function inspect(label){
+    const result=await page.locator('.slide:not([hidden]) svg').evaluate(svg=>{
+      const ts=[...svg.querySelectorAll('text')].filter(t=>t.textContent.trim()).map(t=>({text:t.textContent,b:t.getBBox()}));
+      const outside=ts.filter(t=>t.b.x<30||t.b.x+t.b.width>1568||t.b.y<0||t.b.y+t.b.height>899).map(t=>t.text);
+      const overlaps=[];
+      for(let i=0;i<ts.length;i++)for(let j=i+1;j<ts.length;j++){
+        const a=ts[i].b,b=ts[j].b;
+        const dx=Math.min(a.x+a.width,b.x+b.width)-Math.max(a.x,b.x);
+        const dy=Math.min(a.y+a.height,b.y+b.height)-Math.max(a.y,b.y);
+        if(dx>5&&dy>Math.min(a.height,b.height)*.3)overlaps.push([ts[i].text,ts[j].text]);
+      }
+      return {outside,overlaps};
+    });
+    if(result.outside.length||result.overlaps.length)issues.push({label,...result});
+  }
+  for(let i=0;i<18;i++){
+    if(slides[i].title.startsWith('Question '))assert.ok(slides[i+1].title.startsWith(slides[i].title.replace('Question','Solution').split(':')[0]));
+    await page.evaluate(n=>{location.hash='slide-'+n;},i+1);await settle();
+    assert.equal(await page.locator('.slide:not([hidden])').count(),1);
+    assert.equal(await page.locator('#counter').innerText(),`${i+1} / 18`);
+    await inspect(`slide-${i+1}`);
+    await page.locator('.slide:not([hidden])').screenshot({path:path.join(out,`slide-${String(i+1).padStart(2,'0')}.png`)});
+  }
+  for(const [kind,number,last] of [['generation',2,2],['flash',12,3],['softmax',13,2]]){
+    await page.evaluate(n=>{location.hash='slide-'+n;},number);await settle();
+    for(let n=1;n<=last;n++){
+      await page.locator(`[data-step-next="${kind}"]`).click();
+      assert.equal(await page.locator(`#slide-${number}`).getAttribute('data-example-step'),String(n));
+      await inspect(`${kind}-${n}`);
+      await page.locator(`#slide-${number}`).screenshot({path:path.join(out,`${kind}-${n}.png`)});
+    }
+    await page.locator(`[data-step-prev="${kind}"]`).click();
+  }
+  const numerical=await page.evaluate(()=>window.week2Examples.softmaxResult());
+  assert.ok(Math.abs(numerical.output-30)<1e-12);
+  const fixture='batch_size,prompt_tokens,output_tokens,decode_step_ms_p50,per_user_tokens_s,aggregate_output_tokens_s,status\n1,512,65,10,100,100,ok\n8,512,65,20,50,400,ok\n64,512,65,,,,oom\n';
+  await page.evaluate(()=>{location.hash='slide-16';});await settle();
+  await page.locator('#csv-file').setInputFiles({name:'test-fixture.csv',mimeType:'text/csv',buffer:Buffer.from(fixture)});
+  assert.match(await page.locator('#import-status').innerText(),/Loaded 2/);
+  await page.evaluate(()=>{location.hash='slide-8';});await settle();
+  assert.equal(await page.locator('#slide-8').getAttribute('data-data-mode'),'measured');
+  await page.selectOption('#batch-select','8');await inspect('chart-import');
+  assert.match(await page.locator('#batch-chart').textContent(),/400 tokens\/s in total/);
+  assert.equal(await page.evaluate(()=>{try{window.week2Examples.parseData('batch_size\n1');return false;}catch(e){return true;}}),true);
+  await page.evaluate(()=>{location.hash='slide-16';});await settle();await page.locator('#reset-data').click();
+  await page.locator('#notes-toggle').click();assert.match(await page.locator('#notes-content').innerText(),/random weights/);await page.keyboard.press('Escape');
+  await page.locator('#overview-toggle').click();assert.equal(await page.locator('.overview-item').count(),18);await page.keyboard.press('Escape');
+  for(const [width,height] of [[1280,770],[1024,650],[768,560]]){
+    await page.setViewportSize({width,height});await settle();
+    const b=await page.locator('#stage').boundingBox();assert.ok(b.x>=-1&&b.y>=-1&&b.x+b.width<=width+1);
+  }
+  await page.setViewportSize({width:1600,height:960});await settle();
+  const before=await page.locator('#slide-13').getAttribute('data-example-step');
+  await page.evaluate(()=>window.dispatchEvent(new Event('beforeprint')));
+  assert.equal(await page.locator('#slide-13').getAttribute('data-example-step'),'2');
+  await page.evaluate(()=>window.dispatchEvent(new Event('afterprint')));
+  assert.equal(await page.locator('#slide-13').getAttribute('data-example-step'),before);
+  await page.pdf({path:path.join(out,'deck.pdf'),preferCSSPageSize:true,printBackground:true});
+  await fs.writeFile(path.join(out,'review.json'),JSON.stringify({slides,issues,errors,requests,numerical},null,2));
+  await browser.close();
+  console.log(JSON.stringify({slides:18,minutes:30,issues,errors,requests,numerical},null,2));
+  assert.deepEqual(errors,[]);assert.deepEqual(requests,[]);assert.deepEqual(issues,[]);
+})().catch(e=>{console.error(e);process.exit(1);});

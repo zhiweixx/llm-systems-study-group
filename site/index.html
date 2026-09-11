@@ -19,13 +19,30 @@
   <p class="muted">Each question is followed by its solution. Use the arrow keys to navigate, or the Slides and Notes controls while presenting.</p>
 </section>
 
+<section aria-labelledby="week2">
+  <div class="section-heading"><h2 id="week2">Week 2: Single-GPU inference performance</h2></div>
+  <p>The model fits in memory—what determines how fast it generates tokens? Follow prefill and decode, explain weight and KV-cache traffic, and see how batching, FlashAttention, and CUDA Graphs address different bottlenecks.</p>
+  <p class="presentation-link"><a href="week-2/slides.html#slide-1">Present slides</a><span>18 slides · 30-minute presentation</span></p>
+  <dl class="materials">
+    <div><dt><a href="week-2/speaker-notes.html">Speaker notes</a></dt><dd>Teaching sequence, worked explanations, sources, and discussion guidance.</dd></div>
+    <div><dt><a href="week-2/lab.html">Benchmark lab</a></dt><dd>Measure the effect of batch size on latency, output-token throughput, and memory usage.</dd></div>
+    <div><dt><a href="week-2/slides.html" download="llm-systems-week-2.html">Download HTML slides</a></dt><dd>Self-contained figures and interactions for offline presentation.</dd></div>
+  </dl>
+  <h3>Discussion questions</h3>
+  <ol class="question-list">
+    <li><a href="week-2/slides.html#slide-5">Why does a longer context slow decoding even when KV caching is enabled?</a><span>Separate the work that the cache saves from the data that attention still needs to read.</span></li>
+    <li><a href="week-2/slides.html#slide-9">Why can higher total throughput coincide with slower generation for each user?</a><span>Choose a batch size using a latency target as well as tokens per second.</span></li>
+  </ol>
+  <p class="muted">Each question is followed by a solution slide. The benchmark lab distinguishes actual measurements from illustrative teaching examples.</p>
+</section>
+
 <section aria-labelledby="course-plan">
   <h2 id="course-plan">The four-week plan</h2>
   <div class="table-wrap"><table>
     <thead><tr><th>Week</th><th>Topic</th><th>Materials</th></tr></thead>
     <tbody>
       <tr><td>1</td><td>GPU memory and performance</td><td><a href="week-1/slides.html#slide-1">Slides available</a></td></tr>
-      <tr><td>2</td><td>Single-GPU inference performance</td><td>Planned</td></tr>
+      <tr><td>2</td><td>Single-GPU inference performance</td><td><a href="week-2/slides.html#slide-1">Slides</a> · <a href="week-2/lab.html">Benchmark lab</a></td></tr>
       <tr><td>3</td><td>Multi-GPU parallelism and sharding</td><td>Planned</td></tr>
       <tr><td>4</td><td>LLM serving, scheduling, and KV management</td><td><a href="week-4/prefix-cache.html">Prefix-cache notes</a>; slides planned</td></tr>
     </tbody>
@@ -35,7 +52,7 @@
 
 <section aria-labelledby="reading">
   <h2 id="reading">Reading and attribution</h2>
-  <p>The study group draws on <a href="https://github.com/stanford-cs336/lectures">Stanford CS336</a>, <a href="https://horace.io/brrr_intro.html">Horace He’s performance introduction</a>, the <a href="https://nanotron-ultrascale-playbook.static.hf.space/index.html">Ultra-Scale Playbook</a>, and the <a href="https://jax-ml.github.io/scaling-book/">Scaling Book</a>.</p>
+  <p>The study group draws on <a href="https://github.com/stanford-cs336/lectures">Stanford CS336</a>, <a href="https://scalable-ai.eecs.berkeley.edu/">Berkeley Scalable AI</a>, <a href="https://horace.io/brrr_intro.html">Horace He’s performance introduction</a>, the <a href="https://nanotron-ultrascale-playbook.static.hf.space/index.html">Ultra-Scale Playbook</a>, and the <a href="https://jax-ml.github.io/scaling-book/">Scaling Book</a>.</p>
   <p>The organization is inspired by <a href="https://github.com/CurryTang/mlphdinterview">CurryTang’s ML PhD interview notes</a>. The numerical questions here are authored teaching exercises. Hardware constants and implementation details link to their supporting sources.</p>
   <p><a href="references.html">All references</a></p>
 </section>

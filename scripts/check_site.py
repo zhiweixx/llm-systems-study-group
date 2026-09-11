@@ -12,6 +12,7 @@ class Page(HTMLParser):
     def __init__(self, path):
         super().__init__()
         self.path, self.ids, self.links, self.title = path, set(), [], False
+        self.resources = []
         self.feed(path.read_text())
 
     def handle_starttag(self, tag, attrs):
@@ -24,11 +25,19 @@ class Page(HTMLParser):
         for key in ("href", "src"):
             if key in attrs:
                 self.links.append(attrs[key])
+                if key == "src" or tag == "link" or (tag == "image" and key == "href"):
+                    self.resources.append(attrs[key])
 
 
 def main():
     pages = {p.resolve(): Page(p) for p in OUT.rglob("*.html")}
-    assert len(pages) == 7, "Expected course pages, Week 1 materials, and Week 4 prefix-cache notes"
+    expected_routes = {
+        "index.html", "curriculum.html", "references.html",
+        "week-1/slides.html", "week-1/cheatsheet.html", "week-1/speaker-notes.html",
+        "week-2/slides.html", "week-2/speaker-notes.html", "week-2/lab.html",
+        "week-4/prefix-cache.html",
+    }
+    assert {str(path.relative_to(OUT.resolve())) for path in pages} == expected_routes, "Unexpected or missing published HTML routes"
     checked = 0
     for path, page in pages.items():
         assert page.title, f"Missing page title: {path.name}"
@@ -49,14 +58,20 @@ def main():
             if url.fragment and dest in pages:
                 assert unquote(url.fragment) in pages[dest].ids, f"Missing anchor: {path.name} -> {link}"
             checked += 1
-    source = (ROOT / "week-1-gpu-memory-short.html").read_bytes()
-    assert (OUT / "week-1/slides.html").read_bytes() == source, "Slide output differs from source"
-    slide_page = pages[(OUT / "week-1/slides.html").resolve()]
-    slide_ids = {i for i in slide_page.ids if re.fullmatch(r"slide-\d+", i)}
-    assert slide_ids == {f"slide-{n}" for n in range(1, 25)}
-    assert "09/10/26" in source.decode()
+    for source_name, route, slide_count in (
+            ("week-1-gpu-memory-short.html", "week-1/slides.html", 24),
+            ("week-2-inference.html", "week-2/slides.html", 18)):
+        source = (ROOT / source_name).read_bytes()
+        assert (OUT / route).read_bytes() == source, f"Slide output differs from source: {route}"
+        slide_page = pages[(OUT / route).resolve()]
+        slide_ids = {i for i in slide_page.ids if re.fullmatch(r"slide-\d+", i)}
+        assert slide_ids == {f"slide-{n}" for n in range(1, slide_count + 1)}, f"Unexpected slide IDs: {route}"
+        assert all(resource.startswith(("data:", "#")) for resource in slide_page.resources), f"Slides require external resources: {route}"
+    assert "09/10/26" in (OUT / "week-1/slides.html").read_text()
+    for name in ("model.py", "benchmark.py", "plot_results.py", "week2-inference-lab.ipynb"):
+        assert (OUT / "week-2/lab" / name).read_bytes() == (ROOT / "week-2-lab" / name).read_bytes(), f"Lab output differs from source: {name}"
     assert (OUT / ".nojekyll").exists()
-    print(f"Validated {len(pages)} HTML pages, {checked} local links/anchors, 24 slides, and publication boundaries.")
+    print(f"Validated {len(pages)} HTML pages, {checked} local links/anchors, 24 Week 1 slides, 18 Week 2 slides, lab downloads, and publication boundaries.")
 
 
 if __name__ == "__main__":

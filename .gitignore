@@ -9,6 +9,16 @@
 !/week-1-gpu-memory-short.html
 !/week-1-llm-systems-cheatsheet.md
 !/week-1-short-speaker-notes.md
+!/week-2-inference.html
+!/week-2-speaker-notes.md
+!/week-2-lab/
+/week-2-lab/*
+!/week-2-lab/README.md
+!/week-2-lab/model.py
+!/week-2-lab/benchmark.py
+!/week-2-lab/plot_results.py
+!/week-2-lab/week2-inference-lab.ipynb
+!/week-2-lab/test_lab.py
 !/week-4-prefix-cache-notes.md
 !/site/
 !/scripts/
