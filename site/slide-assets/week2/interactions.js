@@ -29,8 +29,9 @@
     s+=text(75,555,'KV cache after this pass',27,700)+text(75,601,`${4+n} processed positions`,26,400,MUTED);
     for(let i=0;i<6;i++)s+=`<g opacity="${i<4+n?1:.18}">`+box(435+i*115,549,104,65,words[i],i<4?PALE:'#dcece6',22)+'</g>';
     s+=text(1160,569,'The last predicted token',24)+text(1160,607,'has not entered the cache yet.',24);
-    document.querySelector('#generation-scene').innerHTML=s;
-    document.querySelector('#slide-2').dataset.exampleStep=String(n);
+    const scene=document.querySelector('#generation-scene');
+    scene.innerHTML=s;
+    scene.closest('.slide').dataset.exampleStep=String(n);
   }
   // One query with q=1, d=1 gives scores equal to scalar keys ln(1..4).
   function flash(){
@@ -52,8 +53,9 @@
     status.forEach((v,i)=>s+=box(815+i*218,481,202,60,v,'white',27));
     s+=text(815,590,done?'Final output: u / ℓ = 75 / 2.5 = 30':n===0?'Next: compute this tile’s contribution.':n===1?'Keep state. Discard the score tile.':'Rescale prior state and add this tile.',27,700,done?TEAL:BLUE);
     if(done)s+=text(100,611,'Output in HBM: 30',28,700,TEAL);
-    document.querySelector('#flash-scene').innerHTML=s;
-    document.querySelector('#slide-12').dataset.exampleStep=String(n);
+    const scene=document.querySelector('#flash-scene');
+    scene.innerHTML=s;
+    scene.closest('.slide').dataset.exampleStep=String(n);
   }
   function softmax(){
     const n=state.softmax;
@@ -66,8 +68,9 @@
       s+=text(815,387,'New maximum m′ = ln 4',29)+text(815,434,'Rescale old state by exp(ln 2 − ln 4) = 0.5',27)+text(815,481,'New scaled weights: [0.75, 1]',28)+text(815,528,'ℓ′ = 0.5 × 1.5 + 0.75 + 1 = 2.5',28)+text(815,575,'u′ = 0.5 × 25 + 0.75 × 30 + 1 × 40 = 75',27);
       if(n===2)s+=text(815,625,'Final output = u′ / ℓ′ = 75 / 2.5 = 30',30,700,TEAL);
     }
-    document.querySelector('#softmax-scene').innerHTML=s;
-    document.querySelector('#slide-13').dataset.exampleStep=String(n);
+    const scene=document.querySelector('#softmax-scene');
+    scene.innerHTML=s;
+    scene.closest('.slide').dataset.exampleStep=String(n);
   }
   function update(kind){
     ({generation,flash,softmax})[kind]();
@@ -109,9 +112,10 @@
     s+=text(px(selected)+14,py(selected)-15,`B = ${selected.batch_size}`,26,700,TEAL);
     s+=line(995,273,995,708)+text(1040,315,`Batch ${selected.batch_size}`,36,700,BLUE)+text(1040,378,`${fmt(selected.per_user_tokens_s)} tokens/s per user`,28)+text(1040,428,`${fmt(selected.aggregate_output_tokens_s)} tokens/s in total`,28)+text(1040,478,`${fmt(selected.decode_step_ms_p50)} ms per decode step`,27);
     s+=text(1040,543,imported?'Imported fixed-batch measurements':'Toy model: t = 4 + 0.5B ms',25,600,MUTED)+text(1040,580,imported?'See the run metadata for hardware.':'B is batch size, t is step duration.',24,400,MUTED);
-    document.querySelector('#batch-chart').innerHTML=s;
+    const scene=document.querySelector('#batch-chart');
+    scene.innerHTML=s;
     document.querySelector('#chart-data-source').textContent=dataLabel;
-    document.querySelector('#slide-8').dataset.dataMode=imported?'measured':'illustrative';
+    scene.closest('.slide').dataset.dataMode=imported?'measured':'illustrative';
   }
   sel.addEventListener('change',chart);
   populate();
@@ -154,7 +158,7 @@
     const next=parseData(raw);data=next;imported=true;
     dataLabel=`Measurements: ${name.length>30?name.slice(0,27)+'…':name}`;
     populate();
-    document.querySelector('#import-status').textContent=`Loaded ${data.length} successful batch sizes. Slide 8 now shows measurements from your CSV. Nothing was uploaded.`;
+    document.querySelector('#import-status').textContent=`Loaded ${data.length} successful batch sizes. The batch-size chart now shows measurements from your CSV. Nothing was uploaded.`;
   }
   const input=document.querySelector('#csv-file');
   document.querySelector('#import-button').addEventListener('click',()=>input.click());
@@ -166,7 +170,7 @@
   });
   document.querySelector('#reset-data').addEventListener('click',()=>{
     data=toy;imported=false;dataLabel='Illustrative model, not measurements';populate();
-    document.querySelector('#import-status').textContent='No GPU measurements loaded. Slide 8 currently shows an illustrative model.';
+    document.querySelector('#import-status').textContent='No GPU measurements loaded. The batch-size chart currently shows an illustrative model.';
   });
   let saved;
   window.addEventListener('beforeprint',()=>{saved={...state};for(const k of Object.keys(state)){state[k]=max[k];update(k);}});

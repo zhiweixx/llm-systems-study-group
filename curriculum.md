@@ -2,7 +2,7 @@
 
 For readers who know Transformer models and PyTorch but have little GPU systems background. The course focuses on GPUs, LLM inference, and model serving, with training memory and sharding as supporting topics.
 
-Each meeting lasts 50 minutes. Week 1 uses a 24-slide, 30-minute presentation, followed by 15 minutes of discussion and 5 minutes of buffer. Later meetings reserve at least 15 minutes for discussion. Weeks 2–4 are planned; their slides are not published yet.
+Each meeting lasts 50 minutes. Week 1 uses a 24-slide, 30-minute presentation; Week 2 uses a 21-slide, 30-minute presentation. Both reserve 15 minutes for discussion and 5 minutes of buffer. Week 1 and Week 2 slides are published. Weeks 3–4 are planned and reserve at least 15 minutes for discussion.
 
 ## Week 1: GPU memory and performance
 
@@ -22,12 +22,16 @@ Each meeting lasts 50 minutes. Week 1 uses a 24-slide, 30-minute presentation, f
 
 ## Week 2: Single-GPU inference performance
 
-Build on the performance vocabulary introduced in Week 1. Focus on the behavior of prefill and decode, weight/KV traffic, batching, and actual measurements.
+**Meeting date: September 17, 2026.**
 
-- Compare arithmetic intensity and latency across prefill and decode workloads.
-- Estimate compute time and memory-transfer time under explicit assumptions.
-- Build on Week 1's coalescing and tiling examples to explain how fusion, CUDA Graphs, and FlashAttention address different costs.
-- Interpret CPU/GPU timelines and design a batch-size sweep.
+Build on the performance vocabulary introduced in Week 1. Explain why prefill is often compute-bound and small-batch decode is often bandwidth-bound, then connect those bottlenecks to optimizations and measurements.
+
+- Map a linear layer to a matrix multiplication with M token rows: M = B × S during prefill and M = B for one decode step, where B is batch size and S is prompt length.
+- Derive arithmetic intensity from matrix-multiplication FLOPs and bytes. Show how processing more token rows reuses the same weights and changes the likely bottleneck.
+- Compare worked H100 compute-time and memory-transfer lower bounds under explicit assumptions; distinguish ideal bounds from measured runtime.
+- Separate weight traffic from request-specific KV traffic: batching improves weight reuse, while longer contexts increase the KV data attention must read.
+- Use FlashAttention to apply Week 1's tiling and fusion concepts, and distinguish its avoided HBM traffic from the launch overhead targeted by CUDA Graphs.
+- Interpret CPU/GPU timelines and design a fixed-workload batch-size sweep measuring decode-step latency, aggregate output-token throughput, and peak memory.
 
 **Discussion:** aggregate tokens/s increases with batch size, but each user's time between tokens becomes longer. Explain why both can happen and what to measure next.
 
