@@ -20,9 +20,10 @@
 </section>
 
 <section aria-labelledby="week2">
-  <div class="section-heading"><h2 id="week2">Week 2: Single-GPU inference performance</h2></div>
-  <p>The model fits in memory—what determines how fast it generates tokens? Follow prefill and decode, explain weight and KV-cache traffic, and see how batching, FlashAttention, and CUDA Graphs address different bottlenecks.</p>
-  <p class="presentation-link"><a href="week-2/slides.html#slide-1">Present slides</a><span>21 slides · 30-minute presentation</span></p>
+  <div class="section-heading"><h2 id="week2">Week 2: LLM inference performance</h2></div>
+  <p>Follow prefill and decode, explain weight and KV-cache traffic, and see how batching, PagedAttention, FlashAttention, and CUDA Graphs address different bottlenecks. The single-GPU core leads to a preview of separate prefill and decode GPU pools and their KV-transfer tradeoff.</p>
+  <p class="presentation-link"><a href="week-2/slides.html#slide-1">Present slides</a><span>25 slides · 38-minute full presentation · optional 30-minute route</span></p>
+  <p class="muted">For a 30-minute presentation, skip slides 5, 6, 18, and 24 during the talk. All slides remain available, including the complete online-softmax calculation on <a href="week-2/slides.html#slide-18">slide 18</a>. Choose the route to fit the discussion time.</p>
   <dl class="materials">
     <div><dt><a href="week-2/speaker-notes.html">Speaker notes</a></dt><dd>Teaching sequence, worked explanations, sources, and discussion guidance.</dd></div>
     <div><dt><a href="week-2/lab.html">Benchmark lab</a></dt><dd>Measure the effect of batch size on latency, output-token throughput, and memory usage.</dd></div>
@@ -31,7 +32,7 @@
   <h3>Discussion questions</h3>
   <ol class="question-list">
     <li><a href="week-2/slides.html#slide-8">Why does a longer context slow decoding even when KV caching is enabled?</a><span>Separate the work that the cache saves from the data that attention still needs to read.</span></li>
-    <li><a href="week-2/slides.html#slide-12">Why can higher total throughput coincide with slower generation for each user?</a><span>Choose a batch size using a latency target as well as tokens per second.</span></li>
+    <li><a href="week-2/slides.html#slide-14">Why can higher total throughput coincide with slower generation for each user?</a><span>Choose a batch size using a latency target as well as tokens per second.</span></li>
   </ol>
   <p class="muted">Each question is followed by a solution slide. The benchmark lab distinguishes actual measurements from illustrative teaching examples.</p>
 </section>
@@ -42,7 +43,7 @@
     <thead><tr><th>Week</th><th>Topic</th><th>Materials</th></tr></thead>
     <tbody>
       <tr><td>1</td><td>GPU memory and performance</td><td><a href="week-1/slides.html#slide-1">Slides available</a></td></tr>
-      <tr><td>2</td><td>Single-GPU inference performance</td><td><a href="week-2/slides.html#slide-1">Slides</a> · <a href="week-2/lab.html">Benchmark lab</a></td></tr>
+      <tr><td>2</td><td>LLM inference performance</td><td><a href="week-2/slides.html#slide-1">Slides</a> · <a href="week-2/lab.html">Benchmark lab</a></td></tr>
       <tr><td>3</td><td>Multi-GPU parallelism and sharding</td><td>Planned</td></tr>
       <tr><td>4</td><td>LLM serving, scheduling, and KV management</td><td><a href="week-4/prefix-cache.html">Prefix-cache notes</a>; slides planned</td></tr>
     </tbody>

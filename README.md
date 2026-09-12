@@ -11,13 +11,15 @@ The audience knows Transformer models and PyTorch but has little GPU systems bac
 | Week | Topic | Status |
 | --- | --- | --- |
 | 1 | GPU memory and performance | [24-slide presentation](week-1-gpu-memory-short.html), [cheatsheet](week-1-llm-systems-cheatsheet.md), [speaker notes](week-1-short-speaker-notes.md) |
-| 2 | Single-GPU inference performance | [21-slide presentation](week-2-inference.html), [speaker notes](week-2-speaker-notes.md), [benchmark lab](week-2-lab/README.md) |
+| 2 | LLM inference performance | [25-slide presentation](week-2-inference.html), [speaker notes](week-2-speaker-notes.md), [benchmark lab](week-2-lab/README.md) |
 | 3 | Multi-GPU parallelism and sharding | Planned |
 | 4 | LLM serving, scheduling, and KV management | Slides planned; [prefix-cache teaching notes](week-4-prefix-cache-notes.md) |
 
 Week 1 is dated **September 10, 2026**, with a 30-minute presentation. The story connects GPU memory traffic to lower precision, fusion, coalescing, and tiling, then applies the ideas to memory budgets and MFU. Memory calculations use decimal GB and MB. Each of Questions 1–2 has a separate solution slide immediately afterward. Prefix-cache hit rates are reserved for Week 4. The full plan is in [curriculum.md](curriculum.md).
 
-Week 2 is dated **September 17, 2026**, with a 30-minute presentation. It derives why prefill often becomes compute-bound while small-batch decode is often bandwidth-bound, using the number of tokens processed together, arithmetic intensity, and worked H100 time bounds. It then connects weight and KV traffic to batching, FlashAttention, CUDA Graphs, and performance measurement. Each conceptual question has a solution immediately afterward. The optional benchmark lab measures a fixed workload across batch sizes; illustrative examples in the slides are labeled separately from hardware measurements.
+Week 2 is dated **September 17, 2026**, with a 38-minute full presentation. Its single-GPU core derives why prefill often becomes compute-bound while small-batch decode is often bandwidth-bound, using the number of tokens processed together, arithmetic intensity, and worked H100 time bounds. It connects weight and KV traffic to batching, PagedAttention, FlashAttention, CUDA Graphs, and performance measurement, then previews prefill–decode disaggregation and its KV-transfer tradeoff. Each conceptual question has a solution immediately afterward. The optional benchmark lab measures a fixed workload across batch sizes; illustrative examples in the slides are labeled separately from hardware measurements.
+
+A suggested **30-minute Week 2 route** skips slides 5, 6, 18, and 24 during the talk (2 + 2 + 3 + 1 minutes). All 25 slides remain available, including the complete online-softmax calculation on slide 18. Choose the full or shorter route when presenting; the shorter route leaves 15 minutes for discussion and 5 minutes of buffer in a 50-minute meeting. Advanced disaggregation scheduling and network placement belong to Week 4.
 
 ## Presenting and sharing
 
