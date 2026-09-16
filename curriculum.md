@@ -2,7 +2,7 @@
 
 For readers who know Transformer models and PyTorch but have little GPU systems background. The course focuses on GPUs, LLM inference, and model serving, with training memory and sharding as supporting topics.
 
-Each meeting lasts 50 minutes. Week 1 uses a 24-slide, 30-minute presentation, reserving 15 minutes for discussion and 5 minutes of buffer. Week 2 offers 25 slides with a 38-minute full presentation or a suggested 30-minute route. Choose sections for the talk to preserve 15 minutes of discussion and 5 minutes of buffer. Week 1 and Week 2 slides are published. Weeks 3–4 are planned and reserve at least 15 minutes for discussion.
+Each meeting lasts 50 minutes. Week 1 uses a 24-slide, 30-minute presentation, reserving 15 minutes for discussion and 5 minutes of buffer. Week 2 offers 31 slides with 36 minutes of suggested full content or an approximately 30-minute route. Choose sections for the talk to preserve 15 minutes of discussion and about 5 minutes of buffer. Week 1 and Week 2 slides are published. Weeks 3–4 are planned and reserve at least 15 minutes for discussion.
 
 ## Week 1: GPU memory and performance
 
@@ -30,16 +30,18 @@ Build on the performance vocabulary introduced in Week 1. Explain why prefill is
 - Derive arithmetic intensity from matrix-multiplication FLOPs and bytes. Show how processing more token rows reuses the same weights and changes the likely bottleneck.
 - Compare worked H100 compute-time and memory-transfer lower bounds under explicit assumptions; distinguish ideal bounds from measured runtime.
 - Separate weight traffic from request-specific KV traffic: batching improves weight reuse, while longer contexts increase the KV data attention must read.
+- Distinguish time to first token, inter-token latency, and aggregate throughput. Calculate the KV capacity needed by a set of active requests and show how continuous batching reuses a finished request's slot.
 - Explain how PagedAttention maps logical KV blocks to physical GPU blocks, allocates blocks as a request grows, and reuses released capacity. Distinguish reduced allocation waste from the historical KV reads still required by attention.
-- Use FlashAttention to apply Week 1's tiling and fusion concepts, and distinguish its avoided HBM traffic from the launch overhead targeted by CUDA Graphs.
-- Show how a long prefill can delay ongoing decoding, then preview separate prefill and decode GPU pools, KV transfer, and the workload and bandwidth tradeoffs. Treat reduced interference and separate tuning as benefits, without promising an automatic throughput gain.
+- Derive online softmax from attention's weighted average: keep the maximum, denominator, and weighted-value sum; rescale when the maximum rises; verify a complete two-key example. Use FlashAttention to connect this recurrence to tiled GPU execution. All arithmetic remains on the slides.
+- Diagnose a numerically correct paged-cache prototype that concatenates its K/V pages. Separate persistent allocation from temporary copies and explain why the attention kernel must consume the block table.
+- Read the published interference experiment in DistServe Figure 2, then compare chunked prefill with separate prefill and decode GPU pools. Explain KV transfer and workload tradeoffs without promising an automatic throughput gain.
 - Interpret CPU/GPU timelines and design a fixed-workload batch-size sweep measuring decode-step latency, aggregate output-token throughput, and peak memory.
 
-**Presentation routes:** the full 25-slide deck takes 38 minutes. A suggested 30-minute route skips slides 5, 6, 18, and 24 during the talk (2 + 2 + 3 + 1 minutes). All slides remain available, including every step of the online-softmax calculation on slide 18. The presenter chooses the route.
+**Presentation routes:** the full 31-slide deck has 36 minutes of suggested content. An approximately 30-minute route skips slides 6, 7, 25, 29, and 30 (30.5 minutes). It retains the complete online-softmax derivation and numerical example on slides 17–20. The presenter chooses the route.
 
-**Discussion:** aggregate tokens/s increases with batch size, but each user's time between tokens becomes longer. Explain why both can happen and what to measure next.
+**Discussion:** a paged KV implementation can produce correct outputs while still copying the entire history. Identify those copies, explain what a page-aware kernel changes, and distinguish fitting more requests from making each request faster.
 
-**Reading:** [Scaling Book: rooflines](https://jax-ml.github.io/scaling-book/roofline/), [Scaling Book: inference](https://jax-ml.github.io/scaling-book/inference/), [Horace He: performance from first principles](https://horace.io/brrr_intro.html), [PagedAttention](https://arxiv.org/abs/2309.06180), and [DistServe](https://www.usenix.org/conference/osdi24/presentation/zhong-yinmin).
+**Reading:** [CS336 Lecture 10](https://cs336.stanford.edu/lectures/?trace=lecture_10) for inference, [CS336 Lecture 5, pp. 52–54](https://raw.githubusercontent.com/stanford-cs336/lectures/main/lecture_05.pdf#page=52) for online softmax, [Berkeley Spring 2026 Lecture 18](https://scalable-ai.eecs.berkeley.edu/S2026/assets/lecture_slides/lecture_18.pdf) for serving, [PagedAttention](https://arxiv.org/abs/2309.06180), and [DistServe](https://www.usenix.org/conference/osdi24/presentation/zhong-yinmin).
 
 ## Week 3: Multi-GPU parallelism and sharding
 

@@ -1,22 +1,27 @@
 """Build the self-contained Week 2 HTML presentation and companion notes.
 
 Native SVG teaching diagrams retain the Week 1 design and support interactive
-steps. No external fonts, images, scripts, or network calls are required.
+steps. Source figures are embedded. No external fonts, scripts, or network calls are required.
 """
 from pathlib import Path
 from html import escape as esc
+import base64
 
 ROOT = Path(__file__).resolve().parents[1]
 ASSETS = ROOT / 'site/slide-assets/week2'
 BLUE, INK, MUTED, PALE, LINE = '#245675', '#172329', '#58656d', '#edf3f7', '#aec3d1'
 TEAL, WARM = '#397b71', '#a36330'
 SOURCES = {
-    'inference': ('CS336 Lecture 10', 'https://github.com/stanford-cs336/lectures/blob/main/lecture_10.py'),
-    'flash': ('CS336 Lecture 5, pp. 50–54', 'https://raw.githubusercontent.com/stanford-cs336/lectures/main/lecture_05.pdf#page=50'),
+    'inference': ('CS336 Lecture 10', 'https://cs336.stanford.edu/lectures/?trace=lecture_10'),
+    'flash': ('CS336 Lecture 5, pp. 52–54', 'https://raw.githubusercontent.com/stanford-cs336/lectures/main/lecture_05.pdf#page=52'),
     'kernels': ('CS336 Lecture 6', 'https://github.com/stanford-cs336/lectures/blob/main/lecture_06.py'),
-    'berkeley': ('Berkeley Lecture 18', 'https://scalable-ai.eecs.berkeley.edu/assets/lecture_slides/lecture_18.pdf#page=9'),
-    'pareto': ('Berkeley Lecture 19, part 1, p. 10', 'https://scalable-ai.eecs.berkeley.edu/assets/lecture_slides/lecture_19_1.pdf#page=10'),
-    'performance': ('Berkeley Lecture 2, pp. 44–45', 'https://scalable-ai.eecs.berkeley.edu/assets/lecture_slides/lecture2.pdf#page=44'),
+    'berkeley': ('Berkeley L18, PDF pp. 9–16', 'https://scalable-ai.eecs.berkeley.edu/S2026/assets/lecture_slides/lecture_18.pdf#page=9'),
+    'berkeley_chunk': ('Berkeley L18, PDF p. 18', 'https://scalable-ai.eecs.berkeley.edu/S2026/assets/lecture_slides/lecture_18.pdf#page=18'),
+    'berkeley_bench': ('Berkeley L18, PDF pp. 47–53', 'https://scalable-ai.eecs.berkeley.edu/S2026/assets/lecture_slides/lecture_18.pdf#page=47'),
+    'berkeley_pd': ('Berkeley L18, PDF pp. 39–41', 'https://scalable-ai.eecs.berkeley.edu/S2026/assets/lecture_slides/lecture_18.pdf#page=39'),
+    'normalizer': ('Online normalizer, 2018', 'https://arxiv.org/abs/1805.02867'),
+    'orca': ('Orca, §4.1', 'https://www.usenix.org/system/files/osdi22-yu.pdf#page=5'),
+    'distfig': ('DistServe, Fig. 2 (OSDI 2024)', 'https://www.usenix.org/system/files/osdi24-zhong-yinmin.pdf#page=5'),
     'paper': ('FlashAttention paper', 'https://arxiv.org/abs/2205.14135'),
     'graphs': ('PyTorch CUDA Graphs', 'https://docs.pytorch.org/docs/stable/notes/cuda.html#cuda-graphs'),
     'timing': ('PyTorch CUDA timing', 'https://docs.pytorch.org/docs/stable/notes/cuda.html#asynchronous-execution'),
@@ -81,16 +86,8 @@ slides=[]
 def add(title, minutes, body, notes, sources=()):
     slides.append(dict(title=title,minutes=minutes,body=body,notes=notes,sources=list(sources)))
 
-# 1
-add('LLM inference performance',.5,
-    text(75,205,'09/17/26',30,color=MUTED)+
-    lines(75,310,['The model fits in memory.', 'What determines how fast it generates tokens?'],43,weight=700)+
-    line(75,410,1525,410)+
-    text(75,475,'The workload',32,700,color=BLUE)+text(610,475,'Prefill, decode, and growing KV caches',31)+
-    line(75,513,1525,513)+text(75,574,'The bottlenecks',32,700,color=BLUE)+text(610,574,'Weight traffic, attention traffic, and launches',31)+
-    line(75,612,1525,612)+text(75,673,'The serving choices',32,700,color=BLUE)+text(610,673,'Batching, paged KV storage, and PD separation',31)+
-    text(75,795,'Extended deck: 38 minutes of content; choose sections for a 30-minute talk',27,color=MUTED),
-    'Connect to Week 1: GPU compute can run ahead of its ability to move data. Most examples study a causal dense Transformer on one GPU; the PD section previews how serving can separate the phases across GPU resources. The goal is to explain a bottleneck, predict a useful change, and measure it. The full deck has 38 minutes of suggested content. One 30-minute route skips slides 5, 6, 18, and 24; all four remain available, including the complete interactive online-softmax arithmetic. Reserve 15 minutes for discussion and 5 minutes of buffer. The displayed date assumes the weekly meeting after September 10. The two questions are authored teaching exercises, not attributed interview reports.')
+# The cover content is filled after ordering and timing are resolved.
+add('LLM inference performance',.5,'','')
 
 # 2
 add('A prompt produces the first token',2,
@@ -110,7 +107,7 @@ add('Prefill and decode have different performance limits',1.5,
     ],[.32,.34,.34],row_h=84,size=27)+
     text(75,706,'Typical regime: a sufficiently long prompt, or decode with a small batch.',27,color=MUTED)+
     takeaway('The crucial difference is how much work each loaded weight supports.'),
-    'Inference is the overall task, with both prefill and decode phases. Compute-bound means arithmetic throughput is the main rate limit; memory-bandwidth-bound means the rate of moving bytes is the main limit. It does not mean running out of memory. Flatten the request and new-token dimensions into M token rows for a dense projection or MLP. Prefill has M=B×S; ordinary decode has M=B because only one new token per request is ready. Long prompts often provide enough reuse to reach compute limits, whereas small decode batches often do not. Short prefills and large batched decode can behave differently, and operators within a pass can have different bottlenecks. The following three slides derive the claim rather than treating it as a rule to memorize.',('inference','berkeley'))
+    'Inference is the overall task, with both prefill and decode phases. Compute-bound means arithmetic throughput is the main rate limit; memory-bandwidth-bound means the rate of moving bytes is the main limit. It does not mean running out of memory. Flatten the request and new-token dimensions into M token rows for a dense projection or MLP. Prefill has M=B×S; ordinary decode has M=B because only one new token per request is ready. Long prompts often provide enough reuse to reach compute limits, whereas small decode batches often do not. Short prefills and large batched decode can behave differently, and operators within a pass can have different bottlenecks. The following slides derive this behavior from the dense-layer workload.',('inference','berkeley'))
 
 # More token rows reuse the same dense-layer weights.
 add('Many token rows reuse the same weights',2,
@@ -185,7 +182,7 @@ add('The KV cache saves work on earlier tokens',1.5,
     'For a fixed causal model, earlier token representations do not depend on newly generated future tokens, so their K/V can be retained. At each layer we compute the current token’s q, k, and v, append k and v to that layer’s cache, and attend over the relevant past positions plus the current position. Only the current hidden state proceeds through the rest of the network. We normally do not cache old queries for standard next-token decoding. Requests use common read-only model weights but different K/V because their token histories differ.',('inference',))
 
 # 5
-add('Question 1: Why does a longer context slow decode?',.5,
+add('Question 1: Why can cached decoding still slow down?',.5,
     lines(75,217,['The same model runs on the same GPU.', 'Batch size is 1. KV caching is already enabled.'],34,gap=55)+
     text(75,390,'Short history',29,700)+''.join(rect(380+i*77,350,65,65,PALE) for i in range(4))+
     text(75,508,'Long history',29,700)+''.join(rect(380+i*77,468,65,65,PALE) for i in range(12))+
@@ -258,42 +255,18 @@ add('PagedAttention reduces wasted KV capacity',2,
     'Compare an illustrative strategy reserving space for up to 12 tokens per request against on-demand fixed-size KV blocks. Requests A, B, C currently have 6, 3, 5 cached tokens, respectively: 14 used slots. Fixed reservations allocate 36 slots and leave 22 unused. With 4-token blocks, the requests use 2, 1, 2 blocks: 20 allocated slots with 6 unused tail slots. The unused tail of a block can be filled as that request grows. PagedAttention also avoids requiring each request’s physical blocks to be contiguous, reducing external fragmentation; the next slide explains the lookup. The reservation baseline is a teaching example, not a claim that every contiguous allocator always reserves a fixed maximum. Actual blocks hold vector-valued K/V at model layers, and metadata has a small additional cost. Four tokens per block is a toy choice, not a recommended deployment setting. Paging does not compress K/V, move it automatically to CPU memory, or remove the reads needed for attention. More efficient capacity use permits more concurrent requests when KV capacity is the limiting resource; throughput gains depend on the workload and kernels.',('paged','vllm'))
 
 add('PagedAttention: logical blocks and physical storage',2.5,
-    text(75,193,'A block table maps token positions to KV blocks in GPU memory.',30)+
+    text(75,181,'A block table maps token positions to KV blocks in GPU memory.',29)+
+    text(75,214,'Independent example: A has 6 tokens; C has 8; B arrives later.',24,color=MUTED)+
     '<g id="paging-scene"></g>'+control('paging')+
     takeaway('Attention follows the block table to read the request’s valid K/V.',
               'Physical blocks can be scattered in HBM. Paging still reads the required history.'),
     'Use Next step four times. One physical block holds K/V for four cached token positions. Request C keeps physical blocks 0 and 2 throughout. Initially A has 6 cached tokens: logical blocks 0 and 1 map to physical blocks 4 and 1. A grows to 8 tokens by filling its existing tail block; no old K/V moves. The ninth cached token allocates another free block, physical block 5, with three tail slots unused. A then finishes and releases its unshared blocks. Request B arrives with 3 cached tokens and reuses physical block 4; old A contents are no longer valid. The example deliberately disables prefix retention and sharing; reference-counted shared or cached blocks need different release rules. Token labels count processed positions, not tokens merely sampled. A logical block preserves token order despite nonconsecutive physical addresses. The attention kernel uses the table and sequence length to fetch valid historical K/V, never treating unused slots as valid keys. A storage block here is not a CUDA thread block. PagedAttention can coexist with tiled attention kernels: it addresses KV allocation and lookup, while FlashAttention addresses attention computation and intermediate IO.',('paged','vllm'))
 
 # 8
-add('Total throughput and per-user speed',1.5,
-    text(75,191,'A larger batch can improve aggregate throughput while slowing each user.',30)+
-    '<g id="batch-chart"></g>'+
-    f'''<foreignObject x="1040" y="615" width="465" height="115"><div xmlns="http://www.w3.org/1999/xhtml" class="interaction vertical" data-deck-ignore-keys="true"><label for="batch-select">Batch size <select id="batch-select"></select></label><span id="chart-data-source">Illustrative model, not measurements</span></div></foreignObject>'''+
-    takeaway('Choose throughput subject to the user’s latency requirement.'),
-    'The horizontal axis is generation tokens per second per request, so moving right means a faster user experience. The vertical axis counts output tokens per second across all active requests. Each point is one fixed synchronous batch. The default chart is an explicitly illustrative model with decode-step duration t = 4 + 0.5B milliseconds, where B is batch size. Rates are 1000/t per user and 1000B/t in aggregate. This is not a hardware prediction. Import the accompanying benchmark CSV on slide 23 to replace this chart with local measurements. The Berkeley source inspired the axes; its disaggregated-serving curves are not reused as single-GPU measurements.',('pareto','inference'))
 
 # 9
-add('Question 2: Which batch meets the user’s target?',.5,
-    text(75,201,'A user needs at least 40 generated tokens per second.',33,700)+
-    text(75,251,'Choose the highest total throughput that meets that target.',30)+
-    table(75,307,1450,['Batch size','Tokens/s per user','Total output tokens/s'],[
-        ['1','222','222'],['8','125','1,000'],['32','50','1,600'],['64','28','1,778'],
-    ],[.24,.38,.38],row_h=70,size=29)+
-    text(75,708,'Why is the batch with the highest total throughput not always the best choice?',30,700,color=BLUE)+
-    text(75,798,'Hypothetical example, rounded values. Fixed synchronous batches, no request queue.',25,color=MUTED),
-    'This authored question requires comparison, not a lengthy calculation. All values are hypothetical and consistent with the illustrative chart on slide 13 after rounding. Batch 64 maximizes throughput among these rows but only delivers about 28 tokens/s per request. Ask which workload would accept that tradeoff. Offline bulk processing can prioritize aggregate throughput, while interactive use needs an explicit per-request target. These average rates are not p95 serving guarantees.',('pareto',))
 
 # 10
-add('Solution 2: Batch 32 meets both objectives',1,
-    label_box(75,205,390,105,'Batch 32',size=37)+
-    text(540,248,'50 tokens/s per user',35,700,color=BLUE)+text(540,299,'1,600 total output tokens/s',32)+
-    line(75,360,1525,360)+
-    text(75,422,'Batch 64',31,700)+lines(435,421,['More total throughput, but only 28 tokens/s per user.', 'It misses the 40 tokens/s target.'],30)+
-    line(75,527,1525,527)+
-    text(75,590,'For an actual deployment',31,700)+
-    lines(75,648,['Sweep the batch size at the intended context length.', 'Check memory capacity and latency variation before choosing.'],29)+
-    takeaway('“Faster” needs a metric and a workload.'),
-    'Among the offered configurations, batch 32 delivers the highest aggregate throughput while meeting 40 tokens/s per user. A batch of 64 would be a reasonable choice if maximizing offline throughput were the objective and memory capacity allowed it. Real serving has variable arrivals and lengths, scheduling, queueing, and tail latency. Those complications belong to Week 4. The demonstration on slide 23 will measure repeated fixed-batch decode loops rather than production per-request percentiles.',('pareto','berkeley'))
 
 # 11
 add('Ordinary attention materializes large intermediates',1.5,
@@ -307,19 +280,8 @@ add('Ordinary attention materializes large intermediates',1.5,
     'A denotes scores and S denotes sequence length. Q, K, V have already been projected; attention proper computes two matrix products separated by a row softmax. The drawing shows dense matrices. Causal attention masks future keys, and optimized kernels can skip corresponding work. The problem is intermediate storage and traffic. Computing more efficiently does not require changing the attention definition. Modern PyTorch SDPA may already choose a fused implementation, so ordinary means the explicit separate-operator baseline.',('flash','paper'))
 
 # 12
-add('FlashAttention keeps one tile near compute',2.5,
-    text(75,197,'Last query of a 4-token prompt: process two keys at a time.',30)+
-    '<g id="flash-scene"></g>'+control('flash')+
-    takeaway('Accumulate the output as tiles arrive. Write the final output once.'),
-    'Use Next step through four states: load the first K/V tile, compute its scores and partial state, load the second K/V tile, and normalize/write the result. This diagram follows one query row with four keys and scalar values. A real kernel handles query blocks and vector-valued outputs. It retains query data and running state on chip while looping over K/V tiles. It discards each score/probability tile after using it. Other query blocks repeat the procedure and may reread K/V. “Write once” refers to this conceptual output block, not a claim about every implementation or every memory transaction. The next slide shows the rescaling that makes softmax correct.',('flash','paper'))
 
 # 13
-add('Online softmax combines tiles correctly',3,
-    text(75,194,'One query: scores = [ln 1, ln 2, ln 3, ln 4], values = [10, 20, 30, 40]',29)+
-    text(75,244,'The full softmax weights are [1, 2, 3, 4] / 10, so the output is 30.',30,700)+
-    '<g id="softmax-scene"></g>'+control('softmax')+
-    takeaway('Track a running maximum, a normalization sum, and a weighted sum.'),
-    'The toy log scores are chosen so exponentials are simple. First tile: m=ln2, exp(scores-m)=[0.5,1], l=1.5, u=25. Second tile raises the maximum to ln4, so old contributions must be multiplied by exp(ln2-ln4)=0.5. New weights are [0.75,1]. Updated l=0.5×1.5+0.75+1=2.5. Updated u=0.5×25+0.75×30+1×40=75. Output u/l=30. In general m′=max(m,max tile), α=exp(m−m′), p=exp(tile−m′), l′=αl+sum(p), u′=αu+sum(pv). The real u is a vector. Do not average independently normalized tile outputs equally: their normalization masses differ. Masked keys contribute zero weight.',('flash','paper'))
 
 # 14
 add('What FlashAttention changes',.5,
@@ -330,9 +292,9 @@ add('What FlashAttention changes',.5,
         ['Attention definition','Same exact attention, up to floating-point effects'],
         ['Historical KV during decode','Still needed for full-context attention'],
     ],[.47,.53],row_h=77,size=27)+
-    text(75,693,'PagedAttention allocates KV blocks; FlashAttention reduces attention IO.',28,color=MUTED)+
+    text(75,693,'PagedAttention: paged KV access. FlashAttention: less intermediate IO.',28,color=MUTED)+
     takeaway('Less memory traffic can make the same mathematical operation faster.'),
-    'FlashAttention is an IO-aware algorithm for exact dense attention, not sparse attention or an approximation that drops keys. Different execution and accumulation orders can change floating-point rounding. It retains quadratic attention arithmetic but avoids full quadratic score/probability materialization. Training implementations also recompute intermediates in backward. The largest motivating savings here are for prefill and training. Decode has only one new query per request and continues streaming relevant KV; optimized decode kernels have additional design concerns. Do not promise constant traffic, a universal speedup, or that every input value is fetched exactly once.',('performance','paper'))
+    'FlashAttention is an IO-aware algorithm for exact dense attention, not sparse attention or an approximation that drops keys. Different execution and accumulation orders can change floating-point rounding. It retains quadratic attention arithmetic but avoids full quadratic score/probability materialization. Training implementations also recompute intermediates in backward. The largest motivating savings here are for prefill and training. Decode has only one new query per request and continues streaming relevant KV; optimized decode kernels have additional design concerns. Do not promise constant traffic, a universal speedup, or that every input value is fetched exactly once.',('flash','paper'))
 
 # 15
 add('CUDA Graphs reduce repeated launch overhead',1.5,
@@ -351,26 +313,6 @@ add('CUDA Graphs reduce repeated launch overhead',1.5,
     'These timelines are schematic, not profiler measurements and not to scale. A CUDA Graph captures GPU operations and dependencies, then replays them with lower repeated host submission cost. The kernels can remain separate, which distinguishes graphs from operator fusion. Standard PyTorch capture needs stable memory addresses, capture-compatible operations, and static shapes/control flow for that captured graph. Input values can change in existing storage. Prefill lengths and growing decode history require deliberate shape/buffer handling or multiple graphs. Capture/compilation warm-up costs are separate from replay latency. Replay cannot eliminate the underlying arithmetic or required HBM traffic.',('graphs','kernels'))
 
 # A short serving extension follows the single-GPU mechanisms.
-add('Long prefills can delay ongoing decoding',1.5,
-    text(75,197,'User A is already decoding. User B submits a long prompt.',31)+
-    arrow(310,265,1450,265)+text(1465,274,'Time',25,color=MUTED)+
-    text(75,344,'Shared GPU',28,700)+
-    label_box(310,299,145,94,'A: D1',size=29)+
-    label_box(475,299,480,94,'B: long prefill',fill='#e6eeeb',size=31)+
-    label_box(975,299,145,94,'A: D2',size=29)+label_box(1140,299,145,94,'A: D3',size=29)+
-    line(455,396,455,417,BLUE)+line(1120,396,1120,417,BLUE)+
-    text(455,449,'A emits token',25,anchor='middle')+
-    text(1120,449,'A emits next token',25,anchor='middle')+
-    line(455,478,1120,478,BLUE,2)+line(455,468,455,488,BLUE,2)+line(1120,468,1120,488,BLUE,2)+
-    text(787,523,'B’s prefill lengthens A’s gap between tokens',29,700,color=BLUE,anchor='middle')+
-    line(75,563,1525,563)+line(775,589,775,710)+
-    text(75,609,'User A: inter-token latency (ITL)',28,700)+
-    text(75,655,'Time between successive output tokens',27)+
-    text(825,609,'User B: time to first token (TTFT)',28,700)+
-    text(825,655,'Time from arrival to the first output token',27)+
-    text(75,709,'Schematic schedule; widths are illustrative, not measured timings.',25,color=MUTED)+
-    takeaway('Long prompt work can disrupt steady token delivery to other users.'),
-    'D1, D2, D3 are successive decode iterations for request A, not Transformer layers. A scheduler runs B’s long prefill between two iterations, so A’s next token waits longer. This is not a picture of GPU kernel preemption: already submitted kernels need not be interrupted. The drawing omits other users, queueing, communication and tokenization to isolate interference. In a real server, TTFT includes queueing and prompt processing before the first token; ITL includes the delay between successive delivered tokens. Sharing resources couples the two objectives. Chunking prefill and interleaving smaller chunks is an alternative mitigation and belongs to the Week 4 scheduling comparison. The next slide shows spatial separation across GPU pools.',('distserve','pd'))
 
 add('Prefill–decode disaggregation',2,
     text(75,195,'Different GPU pools run the phases; the request’s KV state moves between them.',29)+
@@ -391,7 +333,7 @@ add('Prefill–decode disaggregation',2,
     text(75,704,'Transfer-time lower bound = KV bytes / effective link bandwidth',30,700)+
     takeaway('Judge separation by latency targets, workload, and transfer cost.',
               'Different phase bottlenecks alone do not guarantee a speedup.'),
-    'PD means prefill–decode disaggregation. Prefill and decode instances use distinct GPU resources and can choose their resource allocation and batch or parallelism strategies independently. They need compatible access to the model weights, often as separate replicas or sharded replicas. For a request, the prefill side builds K/V across layers and passes that state plus relevant request metadata to the decode side. The first sampled token can be produced by prefill and handed over as well; the figure focuses on KV rather than the exact API ownership of first-token delivery. Decode then continues autoregressive generation without recomputing the prompt. A transfer-time lower bound is payload bytes divided by effective link bandwidth; setup, contention, layout conversion and additional queues can add delay. Layerwise transfer may overlap some communication with prefill, so the full transfer duration is not necessarily extra exposed latency. Benefits include reducing prefill-induced tail ITL and independent TTFT/ITL tuning. Gains in goodput—the request rate that meets latency targets—depend on the workload and placement; disaggregation does not inherently increase raw tokens/s. Long KV transfers or poorly balanced pools can outweigh isolation benefits. Week 4 compares this design with colocated chunked prefill using the same GPU budget and service objectives.',('distserve','pd'))
+    'PD means prefill–decode disaggregation. Prefill and decode instances use distinct GPU resources and can choose their resource allocation and batch or parallelism strategies independently. They need compatible access to the model weights, often as separate replicas or sharded replicas. For a request, the prefill side builds K/V across layers and passes that state plus relevant request metadata to the decode side. The first sampled token can be produced by prefill and handed over as well; the figure focuses on KV rather than the exact API ownership of first-token delivery. Decode then continues autoregressive generation without recomputing the prompt. A transfer-time lower bound is payload bytes divided by effective link bandwidth; setup, contention, layout conversion and additional queues can add delay. Layerwise transfer may overlap some communication with prefill, so the full transfer duration is not necessarily extra exposed latency. Benefits include reducing prefill-induced tail ITL and independent TTFT/ITL tuning. Gains in goodput—the request rate that meets latency targets—depend on the workload and placement; disaggregation does not inherently increase raw tokens/s. Long KV transfers or poorly balanced pools can outweigh isolation benefits. Compare this design with the preceding chunked-prefill schedule under the same GPU budget and service objectives. Week 4 develops placement and scheduling policies in more detail.',('distserve','berkeley_pd'))
 
 # 16
 add('Experiment: sweep batch size on one GPU',1.5,
@@ -402,9 +344,9 @@ add('Experiment: sweep batch size on one GPU',1.5,
         ['GPU, precision, and implementation','Tokens/s per user and across the batch'],
         ['Timing boundaries and warm-up','Peak allocated memory in GB'],
     ],[.5,.5],row_h=72,size=27)+
-    f'''<foreignObject x="75" y="630" width="1450" height="102"><div xmlns="http://www.w3.org/1999/xhtml" class="interaction vertical" data-deck-ignore-keys="true"><div><button type="button" id="import-button">Import benchmark CSV</button><button type="button" id="reset-data">Use illustrative chart</button><a href="https://github.com/zhiweixx/llm-systems-study-group/tree/main/week-2-lab" target="_blank" rel="noopener">Notebook and benchmark</a><input id="csv-file" type="file" accept=".csv,text/csv" hidden="hidden"/></div><span id="import-status" role="status">No GPU measurements loaded. The batch-size chart currently shows an illustrative model.</span></div></foreignObject>'''+
+    f'''<foreignObject x="75" y="630" width="1450" height="92"><div xmlns="http://www.w3.org/1999/xhtml" class="interaction vertical"><a href="https://github.com/zhiweixx/llm-systems-study-group/tree/main/week-2-lab" target="_blank" rel="noopener">Open the notebook, benchmark, and plotting script</a><span>Record t(B). Per-user rate = 1/t(B). Aggregate rate = B/t(B).</span></div></foreignObject>'''+
     takeaway('Warm up, synchronize the timing boundaries, and repeat each measurement.'),
-    'The lab is a small causal Transformer with random weights. It studies execution behavior, not language quality or production model throughput. It preallocates KV storage and avoids copying a growing cache with torch.cat. The benchmark records synchronized wall-clock time including host dispatch, GPU work, KV writes, and greedy token selection. Prefill includes the first prediction. Decode rates refer to later tokens only. Reported trial percentiles describe repeated trial-average step durations, not serving tail latency. Hardware, software, model shape, precision and lengths are recorded in metadata. The implementation stays fixed, but automatic SDPA backend selection can change with tensor shapes; profile the selected kernels if explaining a performance change. Import the generated CSV to replace slide 13’s illustrative chart for this browser session; no file upload or network request occurs. No measured GPU results are bundled.',('kernels','timing','berkeley'))
+    'The lab is a small causal Transformer with random weights. It studies execution behavior, not language quality or production model throughput. It preallocates KV storage and avoids copying a growing cache with torch.cat. The benchmark records synchronized wall-clock time including host dispatch, GPU work, KV writes, and greedy token selection. Prefill includes the first prediction. Decode rates refer to later tokens only. Reported trial percentiles describe repeated trial-average step durations, not serving tail latency. Hardware, software, model shape, precision and lengths are recorded in metadata. The implementation stays fixed, but automatic SDPA backend selection can change with tensor shapes; profile the selected kernels if explaining a performance change. Use the lab plotting script on the saved CSV; the presentation does not invent a performance curve. No local GPU measurements are bundled. The DistServe figure elsewhere in this deck is a separately attributed published measurement, not a run of this lab.',('kernels','timing','berkeley_bench'))
 
 # 17
 add('A measurement should test a bottleneck hypothesis',1,
@@ -416,7 +358,7 @@ add('A measurement should test a bottleneck hypothesis',1,
     ],[.34,.27,.39],row_h=91,size=25)+
     lines(75,696,['A busy GPU timeline alone cannot distinguish compute limits from bandwidth limits.'],28,color=MUTED)+
     takeaway('Profile, predict a change, and check the end-to-end result.'),
-    'Each row is a hypothesis, not a diagnosis from one symptom. A profiler timeline helps reveal launch gaps and which operators consume time. Both bandwidth-bound and compute-bound kernels can keep a GPU continuously busy. Use operator shapes, FLOP/byte reasoning, achieved compute or memory metrics where available, and controlled comparisons to distinguish limits. PyTorch SDPA is a dispatching API and may select different kernels, so inspect its actual backend rather than assuming FlashAttention. Keep numerical behavior and workload comparable. A lower kernel time does not guarantee lower application latency if another cost dominates.',('kernels','berkeley'))
+    'Each row is a hypothesis, not a diagnosis from one symptom. A profiler timeline helps reveal launch gaps and which operators consume time. Both bandwidth-bound and compute-bound kernels can keep a GPU continuously busy. Use operator shapes, FLOP/byte reasoning, achieved compute or memory metrics where available, and controlled comparisons to distinguish limits. PyTorch SDPA is a dispatching API and may select different kernels, so inspect its actual backend rather than assuming FlashAttention. Keep numerical behavior and workload comparable. A lower kernel time does not guarantee lower application latency if another cost dominates.',('kernels','berkeley_bench'))
 
 # 18
 add('Discussion',.5,
@@ -426,15 +368,239 @@ add('Discussion',.5,
     line(75,470,1525,470)+text(75,529,'Change the objective',31,700,color=BLUE)+text(580,529,'Interactive response versus offline throughput',29)+
     line(75,569,1525,569)+text(75,628,'Choose the next experiment',31,700,color=BLUE)+text(580,628,'Which result would change your explanation?',29)+
     text(75,716,'Next: how the same costs change when a model spans multiple GPUs.',29,color=MUTED)+
-    text(75,793,'Reading: CS336 Lectures 5, 6, 10 and Berkeley Scalable AI Lectures 2, 18, 19',25,color=MUTED),
-    'The extended deck totals 38 minutes including short question pauses. For a 30-minute route, skip slides 5, 6, 18, and 24; these retain the full arithmetic and extra diagnostics for reading or another session. Keep 15 minutes for discussion and five minutes of meeting buffer. Ask participants to choose a metric and workload before suggesting an optimization. Revisit the two questions if time is short. Week 3 covers multi-GPU execution and sharding. Week 4 develops arrivals, continuous batching, prefix reuse, paged KV lifecycle management, and PD deployment tradeoffs under serving latency objectives. Sources below also appear on the relevant slides.',('inference','flash','berkeley'))
+    text(75,793,'Reading: CS336 Lectures 5, 6, 10; Berkeley Spring 2026 Lecture 18; cited original papers',25,color=MUTED),
+    'Discussion guidance is filled after ordering and timing are resolved.',('inference','flash','berkeley'))
+
+def mathline(x, y, w, h, markup, size=37):
+    """Native MathML keeps fractions and subscripts readable without a CDN."""
+    return f'<foreignObject x="{x}" y="{y}" width="{w}" height="{h}"><div xmlns="http://www.w3.org/1999/xhtml" class="math-block" style="font-size:{size}px"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><mrow>{markup}</mrow></math></div></foreignObject>'
+
+
+def codeblock(x, y, w, h, code, size=27):
+    return f'<foreignObject x="{x}" y="{y}" width="{w}" height="{h}"><pre xmlns="http://www.w3.org/1999/xhtml" class="code-block" style="font-size:{size}px">{esc(code)}</pre></foreignObject>'
+
+
+# Revised teaching sequence: metrics, workload, memory, kernels, serving.
+add('Latency and throughput measure different things',1,
+    text(75,195,'One request arrives. Its output tokens appear over time.',31)+
+    arrow(140,365,1450,365)+text(1450,411,'Time',25,anchor='end',color=MUTED)+
+    ''.join(line(x,345,x,385,BLUE,3)+text(x,326,label,27,700,anchor='middle') for x,label in [(160,'Arrival'),(810,'Token 1'),(1080,'Token 2'),(1350,'Token 3')])+
+    line(160,439,810,439,BLUE,3)+text(485,483,'Time to first token (TTFT)',29,700,color=BLUE,anchor='middle')+
+    line(810,540,1080,540,TEAL,3)+text(945,583,'Inter-token latency (ITL)',29,700,color=TEAL,anchor='middle')+
+    text(75,672,'Aggregate throughput counts output tokens from all requests per second.',29)+
+    takeaway('A fast first token, a smooth stream, and high total throughput are distinct goals.',
+              'TTFT includes queueing and processing. This timeline is schematic, not a measurement.'),
+    'Start with user-visible behavior before optimization names. Arrival is the chosen service boundary. TTFT runs to the first delivered output token and includes queueing, tokenization, prefill, sampling and delivery overhead. ITL is an interval between successive delivered tokens; a per-request average of these intervals is often called TPOT. Aggregate output throughput counts tokens across requests in a time window. The drawn distances have no numeric time scale. Rates in the fixed-batch lab exclude the first output token and are not production latency percentiles.',('inference','berkeley'))
+
+add('KV memory limits how many requests fit',1,
+    text(75,193,'Every cached position stores a key and a value at every Transformer layer.',29)+
+    mathline(75,230,1450,95,'<mtext>KV bytes</mtext><mo>=</mo><mn>2</mn><mo>×</mo><mi>L</mi><mo>×</mo><msub><mi>D</mi><mtext>KV</mtext></msub><mo>×</mo><mi>b</mi><mo>×</mo><munder><mo>∑</mo><mi>r</mi></munder><msub><mi>S</mi><mi>r</mi></msub>',37)+
+    text(75,354,'L: layers     D_KV: values in each key or value     b: bytes per value',28)+
+    text(75,402,'S_r: cached positions for request r. Sum over the active requests.',28)+
+    line(75,443,1525,443)+
+    text(75,492,'Example: 32 layers, D_KV = 4,096, BF16 (2 bytes)',31,700,color=BLUE)+
+    table(75,528,1450,['One cached token','One 4,096-token request','16 such requests'],[
+        ['524,288 bytes','≈ 2.15 GB','≈ 34.4 GB'],
+    ],[.31,.36,.33],row_h=68,size=28)+
+    takeaway('Weights and temporary buffers need additional memory.',
+              'Count actual KV heads in D_KV. GB uses decimal bytes. No prefix sharing in this example.'),
+    'D_KV is the number of KV heads times the head dimension, not necessarily the full model hidden dimension. The example can be an ordinary 32-head model with head dimension 128. Each token needs 2×32×4096×2 = 524288 bytes. At 4096 cached positions that is 2147483648 bytes, or 2.147 GB, per request; 16 requests need 34.360 GB. This is logical K/V payload only, before block tail waste, metadata, weights, workspace and runtime allocations. Different request lengths add through the sum of resident positions. We use this calculation to motivate allocation and admission, not as a hardware specification to memorize.',('inference','berkeley'))
+
+def batch_schedule():
+    out=''
+    # Each column is an iteration boundary, not an equal-duration interval.
+    for start,title,rows in [(75,'Static membership',[['A','A','','',''],['B','B','B','B','B']]),
+                             (835,'Continuous membership',[['A','A','C','C','C'],['B','B','B','B','B']])]:
+        out+=text(start,285,title,30,700,color=BLUE)
+        for i in range(5): out+=text(start+146+i*112,337,str(i+1),25,anchor='middle',color=MUTED)
+        for r,row in enumerate(rows):
+            out+=text(start,399+r*88,f'Slot {r+1}',26)
+            for i,value in enumerate(row):
+                fill=PALE if value=='A' else '#e3eeea' if value=='C' else '#f0f1f2' if value else 'white'
+                out+=label_box(start+94+i*112,356+r*88,100,64,value or 'idle',fill,size=26)
+        out+=text(start+93,564,'Decode iterations',26,color=MUTED)
+    return out
+
+add('Continuous batching replaces finished requests',1,
+    lines(75,191,['A and B are decoding. A finishes after iteration 2.', 'Request C is ready to decode and waiting for a free slot.'],29,gap=42)+
+    batch_schedule()+line(780,260,780,592)+
+    text(75,637,'Static batch: wait for B before admitting C.',28)+
+    text(835,637,'Continuous batch: admit C at iteration 3.',28)+
+    takeaway('The scheduler revisits batch membership at each iteration boundary.',
+              'C’s prefill is omitted here. Admission also needs KV space and a token budget.'),
+    'The drawing isolates iteration-level membership changes. Each column is one iteration, not a fixed number of milliseconds, so it does not claim a numeric speedup. A needs two more decode tokens, B five, and C three. Under the illustrated static policy, the completed A slot cannot be reused until B finishes. Under continuous membership C takes the slot at the next boundary. Assume C has completed prefill elsewhere/earlier; real scheduling must also budget that work. A vLLM-style scheduler also checks available KV blocks and the step token budget. Different context lengths require appropriate ragged/paged attention handling. Fixed slot count two is purely illustrative.',('inference','orca','berkeley'))
+
+add('Attention is a weighted average',1.25,
+    text(75,195,'For one query q, score each valid key: sⱼ = q · kⱼ / √d.',31)+
+    mathline(150,238,1300,166,'<mi>o</mi><mo>=</mo><munder><mo>∑</mo><mi>j</mi></munder><msub><mi>p</mi><mi>j</mi></msub><msub><mi>v</mi><mi>j</mi></msub><mo>=</mo><mfrac><mrow><munder><mo>∑</mo><mi>j</mi></munder><msup><mi>e</mi><msub><mi>s</mi><mi>j</mi></msub></msup><msub><mi>v</mi><mi>j</mi></msub></mrow><mrow><munder><mo>∑</mo><mi>j</mi></munder><msup><mi>e</mi><msub><mi>s</mi><mi>j</mi></msub></msup></mrow></mfrac>',46)+
+    line(75,429,1525,429)+
+    text(75,489,'Numerator',30,700,color=BLUE)+text(405,489,'Sum each value vector, weighted by exp(score).',30)+
+    text(75,561,'Denominator',30,700,color=BLUE)+text(405,561,'Sum those same positive weights.',30)+
+    text(75,655,'Both sums can accumulate one K/V tile at a time.',33,700)+
+    takeaway('Keep the sums. Divide after the final tile.',
+              'An attention output is a vector. A scalar value in a worked example is just one component.'),
+    'This is attention after Q/K/V projections, restricted to valid positions for a chosen query. The scale sqrt(d) is already included in each score. Substituting p_j=exp(s_j)/sum_k exp(s_k) into sum_j p_j v_j gives the ratio on screen. The denominator is a scalar; the numerator and output are value-dimension vectors. Both unnormalized sums are additive across disjoint tiles, so a tile does not need to know future scores before contributing. This establishes why streaming is mathematically possible. It does not yet address numerical overflow; the next slide introduces the stable scale. Do not independently normalize tiles and average their outputs, because different tiles have different total weight.',('flash','paper'))
+
+add('Stable streaming needs three running values',1.5,
+    text(75,194,'Directly evaluating exp(s) can overflow. Subtract a shared maximum m.',30)+
+    mathline(120,218,1360,152,'<mi>o</mi><mo>=</mo><mfrac><mrow><munder><mo>∑</mo><mi>j</mi></munder><msup><mi>e</mi><mrow><msub><mi>s</mi><mi>j</mi></msub><mo>−</mo><mi>m</mi></mrow></msup><msub><mi>v</mi><mi>j</mi></msub></mrow><mrow><munder><mo>∑</mo><mi>j</mi></munder><msup><mi>e</mi><mrow><msub><mi>s</mi><mi>j</mi></msub><mo>−</mo><mi>m</mi></mrow></msup></mrow></mfrac><mo>=</mo><mfrac><mi>u</mi><mi>ℓ</mi></mfrac>',43)+
+    text(75,395,'The common factor exp(−m) cancels between numerator and denominator.',28,color=MUTED)+
+    table(75,438,1450,['State for positions seen so far','Meaning'],[
+        ['m = max score seen','Reference scale for exponentials'],
+        ['ℓ = Σ exp(sⱼ − m)','Total weight on that scale (scalar)'],
+        ['u = Σ exp(sⱼ − m) vⱼ','Weighted value sum on that scale (vector)'],
+    ],[.49,.51],row_h=70,size=28)+
+    takeaway('A later tile may raise m. The old sums must then change scale.'),
+    'The equations describe the state after processing at least one valid key. m is the maximum of the scores processed so far. On this reference scale every exp(s_j−m) is at most one, avoiding overflow of positive exponentials. Multiplying both sums by the same positive factor does not alter their ratio. The state uses two scalars and one vector per query row; it does not grow with the number of processed keys. A real query tile has one such state per row. Online means an incremental scan within a kernel, not online learning or a server processing internet requests. The remaining obstacle is that m is not known globally until all tiles are visited.',('normalizer','paper'))
+
+add('A new maximum rescales the old contributions',2,
+    text(75,193,'Suppose the next tile raises the maximum from m to m′.',30)+
+    mathline(115,231,1370,112,'<msup><mi>e</mi><mrow><msub><mi>s</mi><mi>j</mi></msub><mo>−</mo><msup><mi>m</mi><mo>′</mo></msup></mrow></msup><mo>=</mo><msup><mi>e</mi><mrow><msub><mi>s</mi><mi>j</mi></msub><mo>−</mo><mi>m</mi></mrow></msup><mo>×</mo><munder><msup><mi>e</mi><mrow><mi>m</mi><mo>−</mo><msup><mi>m</mi><mo>′</mo></msup></mrow></msup><mi>α</mi></munder>',43)+
+    text(75,368,'Every old weight changes by the same factor α, so rescale the two sums.',29)+
+    line(75,404,1525,404)+
+    text(75,452,'1. Common scale',28,700,color=BLUE)+text(445,452,'m′ = max(m, max scores in the new tile)',30)+
+    text(75,508,'2. New weights',28,700,color=BLUE)+text(445,508,'wⱼ = exp(sⱼ − m′)  for keys in the new tile',30)+
+    text(75,566,'3. Merge',28,700,color=BLUE)+text(445,566,'ℓ′ = αℓ + Σ wⱼ',33,700)+
+    text(445,624,'u′ = αu + Σ wⱼ vⱼ',33,700)+
+    text(75,701,'If the maximum stays the same, α = 1. After the last tile, output o = u / ℓ.',28)+
+    takeaway('Rescale both old sums, then add the new tile on the same scale.'),
+    'The identity at the top is the reason this works, not an extra heuristic. For every old score s, exp(s−m′)=exp(s−m) exp(m−m′). Linearity lets us multiply the old denominator and numerator by alpha without retaining old scores or values. The sums in the update range only over the new tile. If the maximum does not increase, alpha is one. Initialization is m=−infinity, l=0, u=0; the first tile with a finite valid maximum gives alpha=0. All-masked tiles require special handling to avoid exp(−infinity−(−infinity)), and are skipped in this introductory derivation. Each state should be updated together, using old l,u in the right-hand sides. The numerator is a vector in real attention.',('normalizer','paper'))
+
+add('Worked example: two keys, one change of scale',2,
+    text(75,192,'Scores s = [1, 2]. Scalar values v = [10, 20]. Process one key per tile.',29)+
+    text(75,244,'When score 2 arrives, α = exp(1 − 2) = e⁻¹ ≈ 0.368.',30,700,color=BLUE)+
+    table(75,288,1450,['State','m','ℓ: total weight','u: weighted sum'],[
+        ['After key 1','1','1','10'],
+        ['Rescale old state','2','e⁻¹','10e⁻¹'],
+        ['Add key 2','2','e⁻¹ + 1','10e⁻¹ + 20'],
+    ],[.32,.10,.25,.33],row_h=79,size=28)+
+    mathline(75,615,710,112,'<mi>o</mi><mo>=</mo><mfrac><mrow><mn>10</mn><msup><mi>e</mi><mrow><mo>−</mo><mn>1</mn></mrow></msup><mo>+</mo><mn>20</mn></mrow><mrow><msup><mi>e</mi><mrow><mo>−</mo><mn>1</mn></mrow></msup><mo>+</mo><mn>1</mn></mrow></mfrac><mo>≈</mo><mn>17.31</mn>',37)+
+    text(885,630,'Full-row check:',27,700)+
+    mathline(873,640,640,94,'<mfrac><mrow><mn>10</mn><msup><mi>e</mi><mn>1</mn></msup><mo>+</mo><mn>20</mn><msup><mi>e</mi><mn>2</mn></msup></mrow><mrow><msup><mi>e</mi><mn>1</mn></msup><mo>+</mo><msup><mi>e</mi><mn>2</mn></msup></mrow></mfrac><mo>≈</mo><mn>17.31</mn>',29)+
+    takeaway('The stored scale changes. The attention result stays the same.',
+              'Averaging the two separately normalized outputs would give 15, which is wrong.'),
+    'This is a complete authored arithmetic example, separate from the symbolic derivation. The first score 1 has relative weight exp(1−1)=1, giving l=1 and u=10. The second score raises m to 2. Rescale all old contributions: l=e^-1 and u=10e^-1. Key 2 has relative weight exp(2−2)=1, so add one to the denominator and 20 to the numerator. The result is 17.3105857863. The full-row expression is algebraically identical after dividing numerator and denominator by e². Each one-key tile normalized independently outputs its own value, 10 and 20, whose unweighted average 15 discards their unequal masses. Larger tiles use sums in exactly the same recurrence; real values are vectors. Every arithmetic step remains on the slide, not only in these notes.',('normalizer','paper'))
+
+add('FlashAttention streams tiles through the running state',1.5,
+    text(75,194,'For one query tile, repeat the same update for each valid K/V tile.',30)+
+    text(75,275,'HBM',32,700,color=BLUE)+text(590,275,'On chip',32,700,color=BLUE)+
+    ''.join(label_box(75,319+i*85,310,65,f'K/V tile {i+1}',size=29) for i in range(3))+
+    arrow(392,433,528,433)+
+    rect(555,310,970,285,'white',BLUE)+
+    text(585,357,'Query tile Q stays available',30,700)+
+    text(585,418,'Compute scores; choose m′ = max(m, tile maximum).',28)+
+    text(585,479,'Rescale old ℓ and u; accumulate exp(scores − m′).',28)+
+    text(585,551,'Running state persists while the next K/V tile arrives.',28,700,color=BLUE)+
+    text(75,665,'After the final tile: normalize u / ℓ and store the output in HBM.',32,700)+
+    takeaway('Tiling bounds working memory. Online softmax preserves the full-row result.',
+              'Illustration of a query-tile loop. Different query tiles may reread K/V.'),
+    'This reconnects the algebra to the GPU memory hierarchy. One query tile and its state are kept on chip, while K/V tiles are streamed from HBM. The score/probability tile is temporary; full S-by-S arrays are never required in HBM. The running state is per query row, and u is a vector. A real kernel partitions storage across registers and shared memory and uses many threads. Do not imply the whole sequence fits on chip, or that all K/V values are read exactly once for the whole attention layer. Loop orders and implementations differ; this is an explanatory query-tile organization consistent with FlashAttention-2-style processing. Causal masks restrict each row’s valid keys.',('flash','paper'))
+
+add('Question 2: Is paged storage enough?',1.5,
+    text(75,193,'A prototype stores K/V in pages, but reconstructs dense tensors every decode step.',29)+
+    codeblock(75,239,1450,226,'# One head. table lists physical pages in logical token order.\n# q: [1, d]; each page: [block_size, d]; T: valid cached positions\nK = torch.cat([K_pool[p] for p in table], dim=0)[:T]\nV = torch.cat([V_pool[p] for p in table], dim=0)[:T]\nout = torch.softmax(q @ K.T / math.sqrt(d), dim=-1) @ V',26)+
+    line(75,490,1525,490)+
+    text(75,545,'1. Can this produce the correct attention output?',31,700)+
+    text(75,606,'2. What extra traffic and storage does reconstructing K/V create?',31,700)+
+    text(75,667,'3. What must change to attend directly to the paged cache?',31,700,color=BLUE)+
+    text(75,803,'Assume a last-position causal query, correct positional encoding, and valid KV contents.',25,color=MUTED),
+    'Authored diagnostic exercise grounded in the PagedAttention kernel design, not a verified interview question from any company. The code is executable for a one-head float tensor setting with the imports and inputs provided. T includes the current processed token. The current query may attend to all T keys, so no future-position mask is needed here. The block table must preserve token order and every view in the list has shape block_size×d. torch.cat allocates a dense tensor and copies page contents; slicing to T occurs after concatenation and does not undo that allocation. Ask participants to separate numerical correctness, persistent allocation, temporary allocations, and bandwidth. The question targets the O(Td) K/V reconstruction. This unfused reference also creates O(T) scores and probabilities; that is a separate cost. No timing or speedup is supplied because they depend on the implementation and workload.',('inference','paged'))
+
+add('Solution 2: The kernel must consume the block table',1.5,
+    text(75,199,'Correct result',31,700,color=BLUE)+
+    lines(430,199,['Yes, if logical order, valid length, and attention semantics match.', 'The physical placement of the pages does not change the formula.'],28,gap=43)+
+    line(75,294,1525,294)+
+    text(75,349,'Extra cost',31,700,color=BLUE)+
+    lines(430,349,['Each torch.cat reads pages and writes a dense K or V temporary.', 'Attention then reads those dense tensors. Pages and copies coexist.'],28,gap=43)+
+    line(75,444,1525,444)+
+    text(75,502,'Direct access',31,700,color=BLUE)+
+    lines(430,502,['Pass the block table and valid lengths into a page-aware kernel.', 'Fetch the required K/V tiles and accumulate attention directly.'],28,gap=43)+
+    text(75,660,'Measure peak live memory and copy traffic, as well as decode-step latency.',29,700)+
+    takeaway('Paged storage and a compatible attention kernel work together.',
+              'The kernel still reads the required historical K/V. Paging does not compress the cache.'),
+    'The prototype can be mathematically correct. Page allocation already reduces some reservation waste, but every concatenate materializes the requested history again, adding O(Td) temporary storage and extra reads/writes per layer and step. Dense K and V can coexist with the page pool. A page-aware kernel translates token ranges using the block table and consumes page contents directly, retaining online softmax state as necessary. It does not need to recreate a whole contiguous K/V history in HBM. Appending new tokens updates the current tail/new page; old cache contents need not move. The benefit is not a promise of faster single-request attention. Compare the same model, dtype, lengths and batch first, then study admitted concurrency under a fixed memory budget. For numerical checking compare against the dense reference with an appropriate floating-point tolerance.',('inference','paged','vllm'))
+
+def source_image(name, x, y, w, h):
+    data=base64.b64encode((ASSETS/name).read_bytes()).decode()
+    return f'<image href="data:image/png;base64,{data}" x="{x}" y="{y}" width="{w}" height="{h}" preserveAspectRatio="xMidYMid meet"/>'
+
+add('A prefill can delay an ongoing decode batch',1.5,
+    text(75,194,'Published measurement: a 13B LLM, with input lengths 128 and 1,024.',29)+
+    source_image('distserve-figure2.png',68,252,1010,476)+
+    line(1090,244,1090,712)+
+    text(1122,284,'How to read it',29,700,color=BLUE)+
+    lines(1122,335,['x: batch size', 'y: batch execution time', '     in milliseconds'],25,gap=39)+
+    text(1122,439,'Dashed: prefill alone',24,color=MUTED)+
+    lines(1122,485,['Orange: decoding only', 'Blue: decoding plus', 'one prefill job'],25,gap=39)+
+    lines(1122,619,['The gap shows added', 'delay for the batch.'],26,weight=700,color=BLUE)+
+    takeaway('Long prompt work can interrupt smooth token delivery.',
+              'Original Fig. 2 from DistServe (OSDI 2024). This is a published case, not our benchmark.'),
+    'Figure reproduced from DistServe Figure 2, physical PDF p5, proceedings p196, with axes, legend and panel labels retained. The horizontal axis is batch size, and the vertical axis is batch execution time in milliseconds, not tokens/s and not end-to-end request latency. Blue adds one prefill job to a decoding batch; orange is decoding-only. Compare the two solid curves at the same batch size within one panel: their vertical gap is the added decoding delay. The dashed horizontal line is the prefill-only baseline; its distance to the blue curve measures prefill slowdown from sharing the batch. These are two different comparisons, not two names for the same gap. The larger gap in the 1024-token panel motivates protecting decoding from long prefill work. Do not compare absolute heights across panels without noticing their different y ranges. The figure caption specifies 13B but does not give a complete per-figure hardware/backend configuration, so this slide does not claim an H100 or a precise A100 setup. The plot demonstrates interference for the authors’ workload, not a universal speedup for PD separation or a comparison with modern chunked-prefill schedulers.',('distfig','berkeley_pd'))
+
+add('Chunked prefill limits work between decode steps',1,
+    text(75,193,'On one GPU, split a long prompt into smaller pieces that the scheduler can interleave.',29)+
+    text(75,278,'One long prefill',29,700,color=BLUE)+
+    label_box(75,309,220,75,'Decode',size=28)+label_box(315,309,700,75,'Prefill the whole prompt',fill='#e3eeea',size=29)+label_box(1035,309,220,75,'Decode',size=28)+
+    line(75,427,1525,427)+text(75,488,'Chunked prefill',29,700,color=BLUE)+
+    ''.join(label_box(75+i*238,522,218,75,label,PALE if i%2==0 else '#e3eeea',size=27) for i,label in enumerate(['Decode','Prefill 1','Decode','Prefill 2','Decode','Prefill 3']))+
+    text(75,682,'Smaller chunks can reduce stalls, but may add overhead and slow prefill completion.',29)+
+    takeaway('Chunking shares GPU time. PD separation uses different GPU resources.',
+              'Schematic schedules, not measured durations. Chunk size must respect both latency goals.'),
+    'The timeline illustrates bounded prompt work between decode opportunities. It is deliberately schematic: rows do not promise equal total time or a numeric speedup. A scheduler may also place prefill chunks and decode tokens in the same step, using a token budget. Splitting a prompt does not remove causal dependencies or the need to access previous K/V; it changes how much new prompt work is scheduled at once. Too-small chunks can increase scheduling/launch overhead and reduce GEMM efficiency. The next slide contrasts this colocated strategy with spatially separate prefill/decode pools. For deployment compare under a fixed GPU budget and input/output length distribution, rather than assuming separation is always necessary.',('berkeley_chunk','distserve'))
+
+# Keep sources/notes attached to their content while reorganizing the narrative.
+by_title={s['title']:s for s in slides}
+ORDER=[
+    'LLM inference performance',
+    'Latency and throughput measure different things',
+    'A prompt produces the first token',
+    'Prefill and decode have different performance limits',
+    'Many token rows reuse the same weights',
+    'Arithmetic intensity connects reuse to the bottleneck',
+    'H100 example: same weights, different bottlenecks',
+    'The KV cache saves work on earlier tokens',
+    'KV memory limits how many requests fit',
+    'Question 1: Why can cached decoding still slow down?',
+    'Solution 1: The cache still has to be read',
+    'Batching affects weight traffic and KV traffic differently',
+    'Continuous batching replaces finished requests',
+    'PagedAttention reduces wasted KV capacity',
+    'PagedAttention: logical blocks and physical storage',
+    'Ordinary attention materializes large intermediates',
+    'Attention is a weighted average',
+    'Stable streaming needs three running values',
+    'A new maximum rescales the old contributions',
+    'Worked example: two keys, one change of scale',
+    'FlashAttention streams tiles through the running state',
+    'What FlashAttention changes',
+    'Question 2: Is paged storage enough?',
+    'Solution 2: The kernel must consume the block table',
+    'CUDA Graphs reduce repeated launch overhead',
+    'A prefill can delay an ongoing decode batch',
+    'Chunked prefill limits work between decode steps',
+    'Prefill–decode disaggregation',
+    'Experiment: sweep batch size on one GPU',
+    'A measurement should test a bottleneck hypothesis',
+    'Discussion',
+]
+assert set(ORDER)==set(by_title), set(by_title)^set(ORDER)
+slides=[by_title[t] for t in ORDER]
+# Existing timings are planning estimates; the detailed derivation is readable
+# in the deck even when the presenter chooses a shorter route.
+for i,t in {3:1.5,4:1,5:1,6:1.5,7:1.5,8:1,10:.5,11:.75,12:1,14:1.5,15:1.5,16:1,22:.5,25:1,28:1.5,29:1,30:.5}.items():
+    slides[i-1]['minutes']=t
+TOTAL_MINUTES=sum(s['minutes'] for s in slides)
+SHORT_SKIP=[6,7,25,29,30]
+SHORT_MINUTES=TOTAL_MINUTES-sum(slides[n-1]['minutes'] for n in SHORT_SKIP)
+slides[0]['body']=text(75,205,'09/17/26',30,color=MUTED)+lines(75,305,['Why does generation slow down,', 'and which part of the system should change?'],43,weight=700)+line(75,410,1525,410)+text(75,475,'Workload and limits',31,700,color=BLUE)+text(635,475,'Prefill, decode, weight reuse, and KV memory',28)+line(75,515,1525,515)+text(75,580,'Attention and storage',31,700,color=BLUE)+text(635,580,'Online softmax, FlashAttention, and paging',28)+line(75,620,1525,620)+text(75,683,'Serving behavior',31,700,color=BLUE)+text(635,683,'Batch membership, interference, and PD',28)+text(75,796,f'{len(slides)} slides with worked derivations and two diagnostic questions',27,color=MUTED)
+slides[0]['notes']=f'Audience: Transformer/PyTorch familiarity with little GPU systems background. Follow the causal chain from latency metrics and matrix shapes to memory allocation, attention IO, and serving schedules. The complete deck has {TOTAL_MINUTES:g} minutes of suggested content. A roughly {SHORT_MINUTES:g}-minute route skips slides {", ".join(map(str,SHORT_SKIP))}. All derivations and the worked example remain visible in the deck. Reserve 15 minutes for discussion. Questions are authored exercises, not attributed company interview reports. The only empirical figure is clearly attributed to DistServe; other diagrams are schematic and H100 bars are theoretical resource bounds.'
+slides[-1]['notes']=f'Use the remaining discussion time to ask what observation could falsify a proposed bottleneck. The full route is {TOTAL_MINUTES:g} minutes; a roughly {SHORT_MINUTES:g}-minute route skips {", ".join(map(str,SHORT_SKIP))}. Week 3 develops multi-GPU parallelism and Week 4 studies scheduling, prefix reuse and serving policies in depth. Revisit the paged-prototype diagnostic if participants confuse memory allocation with the attention kernel.'
 
 def build():
-    assert len(slides)==25
-    assert sum(s['minutes'] for s in slides)==38
-    css=(ASSETS/'base.css').read_text()+'''\nsvg{font-family:Arial,Helvetica,sans-serif}svg text{font-family:Arial,Helvetica,sans-serif}.interaction{font:25px Arial,Helvetica,sans-serif;display:flex;gap:16px;align-items:center;color:#245675}.interaction button,.interaction select{font:24px Arial,Helvetica,sans-serif;border:1px solid #aec3d1;color:#245675;background:white;padding:10px 17px;cursor:pointer}.interaction button:hover{background:#edf3f7}.interaction button:disabled{color:#88939a;cursor:default}.interaction.vertical{align-items:flex-start;flex-direction:column;gap:12px}.interaction a{font-size:23px}.interaction label{display:flex;gap:18px;align-items:center}#import-status{font-size:23px;max-width:1430px}#chart-data-source{font-size:22px;line-height:1.3}button:focus-visible,select:focus-visible{outline:3px solid #397b71;outline-offset:3px}@media print{.interaction button,.interaction select,#import-button,#csv-file,#reset-data{display:none}.interaction{font-size:23px}}\n'''
+    assert len(slides)==31
+    css=(ASSETS/'base.css').read_text()+'''.math-block{height:100%;display:flex;align-items:center;justify-content:flex-start;color:#172329}.math-block math{font-size:inherit}.code-block{margin:0;padding:18px 22px;line-height:1.4;background:#f4f6f8;border-left:3px solid #245675;font-family:ui-monospace,Menlo,Consolas,monospace;white-space:pre}@media print{.math-block,.code-block{break-inside:avoid}}'''+'''\nsvg{font-family:Arial,Helvetica,sans-serif}svg text{font-family:Arial,Helvetica,sans-serif}.interaction{font:25px Arial,Helvetica,sans-serif;display:flex;gap:16px;align-items:center;color:#245675}.interaction button,.interaction select{font:24px Arial,Helvetica,sans-serif;border:1px solid #aec3d1;color:#245675;background:white;padding:10px 17px;cursor:pointer}.interaction button:hover{background:#edf3f7}.interaction button:disabled{color:#88939a;cursor:default}.interaction.vertical{align-items:flex-start;flex-direction:column;gap:12px}.interaction a{font-size:23px}.interaction label{display:flex;gap:18px;align-items:center}button:focus-visible,select:focus-visible{outline:3px solid #397b71;outline-offset:3px}@media print{.interaction button,.interaction select{display:none}.interaction{font-size:23px}}\n'''
     parts=[]
-    notes=['# Week 2 speaker notes','', 'LLM inference performance. 25 slides, 38 minutes of full content. For a 30-minute route, skip slides 5, 6, 18, and 24; every slide remains in the deck. Reserve 15 minutes for discussion.', '', 'The deck and its interactive diagrams work offline. Use arrow keys to change slides, the in-slide buttons to advance examples, and Notes for the explanation. Print shows the completed interactive examples. The batch-size chart starts with an explicitly illustrative model. The optional lab produces real measurements on a CUDA GPU.', '']
+    notes=['# Week 2 speaker notes', '', f'LLM inference performance. {len(slides)} slides, {TOTAL_MINUTES:g} minutes of suggested full content. A roughly {SHORT_MINUTES:g}-minute route skips slides {", ".join(map(str,SHORT_SKIP))}. Reserve 15 minutes for discussion.', '', 'The HTML deck works offline. All online-softmax derivations and arithmetic remain on the slides. The generation and block-table diagrams have step controls. The DistServe plot is an attributed published experiment; the H100 bars are theoretical bounds, and the remaining diagrams are schematic.', '']
     for i,s in enumerate(slides,1):
         footer=line(75,838,1525,838,'#bdc7cc')
         xx=75
@@ -453,14 +619,14 @@ def build():
         for key in s['sources']:
             label,url=SOURCES[key];notes+=[f'- [{label}]({url})']
         notes+=['']
-    chrome='''<nav class="deck-chrome" aria-label="Presentation controls"><div class="chrome-left"><button id="prev" type="button" aria-label="Previous slide">←</button><span id="counter" aria-live="polite">1 / 25</span><button id="next" type="button" aria-label="Next slide">→</button><span id="slide-title"></span></div><div class="chrome-right"><button id="overview-toggle" type="button">Slides</button><button id="notes-toggle" type="button">Notes</button><button id="fullscreen" type="button">Full screen</button><button id="print" type="button">Print / PDF</button><button id="help-toggle" type="button" aria-label="Keyboard help">?</button></div></nav>
+    chrome='''<nav class="deck-chrome" aria-label="Presentation controls"><div class="chrome-left"><button id="prev" type="button" aria-label="Previous slide">←</button><span id="counter" aria-live="polite">1 / 31</span><button id="next" type="button" aria-label="Next slide">→</button><span id="slide-title"></span></div><div class="chrome-right"><button id="overview-toggle" type="button">Slides</button><button id="notes-toggle" type="button">Notes</button><button id="fullscreen" type="button">Full screen</button><button id="print" type="button">Print / PDF</button><button id="help-toggle" type="button" aria-label="Keyboard help">?</button></div></nav>
 <section id="notes-panel" class="deck-overlay" hidden><div class="panel-header"><h2>Speaker notes</h2><button data-close-overlay="true" type="button">Close</button></div><div id="notes-content"></div></section>
-<section id="overview-panel" class="deck-overlay" hidden><div class="panel-header"><h2>25 slides · 38 minutes</h2><button data-close-overlay="true" type="button">Close</button></div><div id="overview-list"></div></section>
-<section id="help-panel" class="deck-overlay" hidden><div class="panel-header"><h2>Presentation controls</h2><button data-close-overlay="true" type="button">Close</button></div><p>Arrow keys: change slides. Home / End: first / last slide. Escape: close a panel.</p><p>Use Next step inside a diagram to advance its example. Each solution follows its question. Notes includes assumptions and sources.</p><p>CSV imports remain in this browser session. Print / PDF shows completed examples.</p></section>'''
+<section id="overview-panel" class="deck-overlay" hidden><div class="panel-header"><h2>31 slides</h2><button data-close-overlay="true" type="button">Close</button></div><div id="overview-list"></div></section>
+<section id="help-panel" class="deck-overlay" hidden><div class="panel-header"><h2>Presentation controls</h2><button data-close-overlay="true" type="button">Close</button></div><p>Arrow keys: change slides. Home / End: first / last slide. Escape: close a panel.</p><p>Use Next step inside a diagram to advance its example. Each solution follows its question. Notes includes assumptions and sources.</p><p>Print / PDF shows completed interactive examples. Online-softmax steps each have their own slide.</p></section>'''
     js=(ASSETS/'navigation.js').read_text()+'\n'+(ASSETS/'interactions.js').read_text()
     html='<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>LLM inference performance · 09/17/26</title><style>'+css+'</style></head><body><main id="viewport" aria-label="Presentation"><div id="stage">'+''.join(parts)+'</div></main>'+chrome+'<script>'+js+'</script></body></html>'
     (ROOT/'week-2-inference.html').write_text(html)
     (ROOT/'week-2-speaker-notes.md').write_text('\n'.join(notes))
-    print('Built 25 slides, 38 minutes, and speaker notes.')
+    print(f'Built {len(slides)} slides, {TOTAL_MINUTES:g} minutes; shorter route {SHORT_MINUTES:g} minutes.')
 
 if __name__=='__main__': build()

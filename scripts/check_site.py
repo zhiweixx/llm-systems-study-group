@@ -60,7 +60,7 @@ def main():
             checked += 1
     for source_name, route, slide_count in (
             ("week-1-gpu-memory-short.html", "week-1/slides.html", 24),
-            ("week-2-inference.html", "week-2/slides.html", 25)):
+            ("week-2-inference.html", "week-2/slides.html", 31)):
         source = (ROOT / source_name).read_bytes()
         assert (OUT / route).read_bytes() == source, f"Slide output differs from source: {route}"
         slide_page = pages[(OUT / route).resolve()]
@@ -71,7 +71,7 @@ def main():
     for name in ("model.py", "benchmark.py", "plot_results.py", "week2-inference-lab.ipynb"):
         assert (OUT / "week-2/lab" / name).read_bytes() == (ROOT / "week-2-lab" / name).read_bytes(), f"Lab output differs from source: {name}"
     assert (OUT / ".nojekyll").exists()
-    print(f"Validated {len(pages)} HTML pages, {checked} local links/anchors, 24 Week 1 slides, 25 Week 2 slides, lab downloads, and publication boundaries.")
+    print(f"Validated {len(pages)} HTML pages, {checked} local links/anchors, 24 Week 1 slides, 31 Week 2 slides, lab downloads, and publication boundaries.")
 
 
 if __name__ == "__main__":
