@@ -1,6 +1,6 @@
 # Week 2 speaker notes
 
-LLM inference performance. 31 slides, 36 minutes of suggested full content. A roughly 30.5-minute route skips slides 6, 7, 25, 29, 30. Reserve 15 minutes for discussion.
+LLM inference performance. 31 slides, 36.75 minutes of suggested full content. A roughly 31.25-minute route skips slides 6, 7, 25, 29, 30. Reserve 15 minutes for discussion.
 
 The HTML deck works offline. All online-softmax derivations and arithmetic remain on the slides. The generation and block-table diagrams have step controls. The DistServe plot is an attributed published experiment; the H100 bars are theoretical bounds, and the remaining diagrams are schematic.
 
@@ -8,7 +8,7 @@ The HTML deck works offline. All online-softmax derivations and arithmetic remai
 
 **Suggested time: 0.5 minutes.**
 
-Audience: Transformer/PyTorch familiarity with little GPU systems background. Follow the causal chain from latency metrics and matrix shapes to memory allocation, attention IO, and serving schedules. The complete deck has 36 minutes of suggested content. A roughly 30.5-minute route skips slides 6, 7, 25, 29, 30. All derivations and the worked example remain visible in the deck. Reserve 15 minutes for discussion. Questions are authored exercises, not attributed company interview reports. The only empirical figure is clearly attributed to DistServe; other diagrams are schematic and H100 bars are theoretical resource bounds.
+Audience: Transformer/PyTorch familiarity with little GPU systems background. Follow the causal chain from latency metrics and matrix shapes to memory allocation, attention IO, and serving schedules. The complete deck has 36.75 minutes of suggested content. A roughly 31.25-minute route skips slides 6, 7, 25, 29, 30. All derivations and the worked example remain visible in the deck. Reserve 15 minutes for discussion. Questions are authored exercises, not attributed company interview reports. The only empirical figure is clearly attributed to DistServe; other diagrams are schematic and H100 bars are theoretical resource bounds.
 
 
 ## 2. Latency and throughput measure different things
@@ -29,11 +29,11 @@ Use Next step twice. The four words are illustrative token labels, not a tokeniz
 - [CS336 Lecture 10](https://cs336.stanford.edu/lectures/?trace=lecture_10)
 - [Berkeley L18, PDF pp. 9–16](https://scalable-ai.eecs.berkeley.edu/S2026/assets/lecture_slides/lecture_18.pdf#page=9)
 
-## 4. Prefill and decode have different performance limits
+## 4. New token rows are only part of the workload
 
 **Suggested time: 1 minutes.**
 
-Inference is the overall task, with both prefill and decode phases. Compute-bound means arithmetic throughput is the main rate limit; memory-bandwidth-bound means the rate of moving bytes is the main limit. It does not mean running out of memory. Flatten the request and new-token dimensions into M token rows for a dense projection or MLP. Prefill has M=B×S; ordinary decode has M=B because only one new token per request is ready. Long prompts often provide enough reuse to reach compute limits, whereas small decode batches often do not. Short prefills and large batched decode can behave differently, and operators within a pass can have different bottlenecks. The following slides derive this behavior from the dense-layer workload.
+M is a count of newly processed token positions, not bytes transferred. At one layer a dense projection or MLP acts on M hidden-state vectors, each with many scalar values. In an uncached prefill every prompt position must be processed to build its per-layer K/V and support later causal positions, even when only the last position produces the next-token prediction. For B=2 and S=4 this is eight positions. In ordinary autoregressive decode, each request feeds its most recently generated token, so two requests supply two new positions. Earlier positions do not need to pass through the projections and MLP again because their K/V has been retained. However each new query still attends to the relevant cached keys and values plus the current position. Weight reads also remain: model weights already reside in GPU HBM, but arithmetic needs to load weight tiles into on-chip storage. This is separate from CPU-to-GPU transfer of token IDs. New hidden-state traffic, weight traffic, historical KV reads, new KV writes, and other intermediates all contribute to physical memory traffic. The cache is not a promise that all historical KV fits on chip. Prefix-cache hits, speculative multi-token decoding, and ragged prompt batches are outside this simple shape comparison.
 
 - [CS336 Lecture 10](https://cs336.stanford.edu/lectures/?trace=lecture_10)
 - [Berkeley L18, PDF pp. 9–16](https://scalable-ai.eecs.berkeley.edu/S2026/assets/lecture_slides/lecture_18.pdf#page=9)
@@ -83,21 +83,23 @@ D_KV is the number of KV heads times the head dimension, not necessarily the ful
 - [CS336 Lecture 10](https://cs336.stanford.edu/lectures/?trace=lecture_10)
 - [Berkeley L18, PDF pp. 9–16](https://scalable-ai.eecs.berkeley.edu/S2026/assets/lecture_slides/lecture_18.pdf#page=9)
 
-## 10. Question 1: Why can cached decoding still slow down?
+## 10. Question 1: Why did a larger decode batch stop helping?
 
-**Suggested time: 0.5 minutes.**
+**Suggested time: 1 minutes.**
 
-Pause before advancing. Invite a distinction between constructing the historical K/V and reading it for a new query. Hold model, hardware, precision, and batch size fixed. We ask why latency might increase, not for an exact proportionality. The rectangles represent historical positions. This is an authored discussion question.
-
-- [CS336 Lecture 10](https://cs336.stanford.edu/lectures/?trace=lecture_10)
-
-## 11. Solution 1: The cache still has to be read
-
-**Suggested time: 0.75 minutes.**
-
-The new query changes at each decode step. Its dot products with the historical keys and its weighted sum of historical values must therefore be computed again. KV caching eliminates rebuilding those historical states, not using them. Under ordinary full-context attention, K/V traffic and attention arithmetic grow with context length. Whole-model latency need not double when context doubles, because other costs remain. Sliding-window, sparse, and compressed attention can change this pattern and are outside this example.
+Ask for a diagnosis with competing explanations, not a memorized prefill/decode label. This is an authored hypothetical case, not measured data or a reported company interview question. All batches fit without offloading; model, precision and implementation remain fixed. Sequence length is held fixed within a comparison. With ordinary one-token decode, a B-request batch produces B output tokens per step. Little throughput improvement after doubling B means the step duration has risen close to twofold. That can happen because per-request KV traffic scales with B, because arithmetic saturates compute throughput, or because per-request host/dispatch work grows with B. Fixed per-step launch overhead alone would usually allow throughput to grow with B rather than explain a plateau. The observation alone cannot distinguish these. An ideal weight-read budget is amortized over the batch, while unrelated requests generally have separate KV histories. Ask what evidence would disprove the proposed diagnosis before selecting an optimization.
 
 - [CS336 Lecture 10](https://cs336.stanford.edu/lectures/?trace=lecture_10)
+- [NVIDIA matmul performance](https://docs.nvidia.com/deeplearning/performance/dl-performance-matrix-multiplication/index.html#math-and-memory-bounds)
+
+## 11. Solution 1: A throughput plateau does not identify the limit
+
+**Suggested time: 1 minutes.**
+
+Let W be the bytes of weights ideally fetched once during one complete decode step, and K(S) the bytes of required K/V fetched for one request across layers. Both are traffic quantities under stated assumptions, not a measurement of reserved memory. Ideal weight-plus-KV reads are W+B K(S); divide by the B emitted tokens to get W/B+K(S). In a bandwidth-dominated model, step time is approximately (W+B K(S))/BW and aggregate output rate is approximately BW/(W/B+K(S)). If B K(S) dominates W, doubling B approximately doubles both step time and emitted tokens, so throughput approaches BW/K(S) even while bandwidth remains the limit. Compute can instead dominate, and the plateau alone proves neither case. Profile time attributed to dense layers versus attention, measured memory traffic and achieved bandwidth, relevant compute throughput, and host/GPU idle gaps. A large byte count alone does not prove bandwidth saturation. Distinguish bandwidth near an achievable ceiling from memory-latency or parallelism problems. Batch-independent launch overhead by itself would generally be amortized as B grows; per-request host/dispatch work that grows with B can instead limit aggregate throughput. Vary B at fixed S and then S at fixed B, keeping weights, GPU, dtype and timing boundaries fixed. Both attention arithmetic and KV traffic increase with S, so a length sweep alone is not proof of a bandwidth limit. Compare counters and kernel timings together. Real caches, rereads, allocations, ragged lengths, shared prefixes and extra intermediates can change the ideal traffic model. No universal speedup or single numeric batch threshold follows from this exercise.
+
+- [CS336 Lecture 10](https://cs336.stanford.edu/lectures/?trace=lecture_10)
+- [NVIDIA matmul performance](https://docs.nvidia.com/deeplearning/performance/dl-performance-matrix-multiplication/index.html#math-and-memory-bounds)
 
 ## 12. Batching affects weight traffic and KV traffic differently
 
@@ -276,7 +278,7 @@ Each row is a hypothesis, not a diagnosis from one symptom. A profiler timeline 
 
 **Suggested time: 0.5 minutes.**
 
-Use the remaining discussion time to ask what observation could falsify a proposed bottleneck. The full route is 36 minutes; a roughly 30.5-minute route skips 6, 7, 25, 29, 30. Week 3 develops multi-GPU parallelism and Week 4 studies scheduling, prefix reuse and serving policies in depth. Revisit the paged-prototype diagnostic if participants confuse memory allocation with the attention kernel.
+Use the remaining discussion time to ask what observation could falsify a proposed bottleneck. The full route is 36.75 minutes; a roughly 31.25-minute route skips 6, 7, 25, 29, 30. Week 3 develops multi-GPU parallelism and Week 4 studies scheduling, prefix reuse and serving policies in depth. Revisit the paged-prototype diagnostic if participants confuse memory allocation with the attention kernel.
 
 - [CS336 Lecture 10](https://cs336.stanford.edu/lectures/?trace=lecture_10)
 - [CS336 Lecture 5, pp. 52–54](https://raw.githubusercontent.com/stanford-cs336/lectures/main/lecture_05.pdf#page=52)

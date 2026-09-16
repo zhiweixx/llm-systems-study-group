@@ -22,8 +22,8 @@
 <section aria-labelledby="week2">
   <div class="section-heading"><h2 id="week2">Week 2: LLM inference performance</h2></div>
   <p>Follow prefill and decode, explain weight and KV-cache traffic, and see how batching, PagedAttention, FlashAttention, and CUDA Graphs address different bottlenecks. The single-GPU core leads to a preview of separate prefill and decode GPU pools and their KV-transfer tradeoff.</p>
-  <p class="presentation-link"><a href="week-2/slides.html#slide-1">Present slides</a><span>31 slides · 36-minute full presentation · optional 30-minute route</span></p>
-  <p class="muted">For an approximately 30-minute presentation, skip slides 6, 7, 25, 29, and 30. This route keeps the complete online-softmax derivation and example on <a href="week-2/slides.html#slide-17">slides 17–20</a>. All slides remain available for reading.</p>
+  <p class="presentation-link"><a href="week-2/slides.html#slide-1">Present slides</a><span>31 slides · about 37 minutes · optional 31-minute route</span></p>
+  <p class="muted">For an approximately 31-minute presentation, skip slides 6, 7, 25, 29, and 30. This route keeps the complete online-softmax derivation and example on <a href="week-2/slides.html#slide-17">slides 17–20</a>. All slides remain available for reading.</p>
   <dl class="materials">
     <div><dt><a href="week-2/speaker-notes.html">Speaker notes</a></dt><dd>Teaching sequence, worked explanations, sources, and discussion guidance.</dd></div>
     <div><dt><a href="week-2/lab.html">Benchmark lab</a></dt><dd>Measure the effect of batch size on latency, output-token throughput, and memory usage.</dd></div>
@@ -31,7 +31,7 @@
   </dl>
   <h3>Discussion questions</h3>
   <ol class="question-list">
-    <li><a href="week-2/slides.html#slide-10">Why does a longer context slow decoding even when KV caching is enabled?</a><span>Separate the work that the cache saves from the data that attention still needs to read.</span></li>
+    <li><a href="week-2/slides.html#slide-10">Why did a larger decode batch stop helping?</a><span>Distinguish KV bandwidth, compute, and host-work limits, then design an experiment to test the diagnosis.</span></li>
     <li><a href="week-2/slides.html#slide-23">Is paged storage enough?</a><span>Diagnose a PyTorch prototype that reconstructs dense K/V tensors from pages before every attention call.</span></li>
   </ol>
   <p class="muted">Each question is followed by a solution slide. The benchmark lab distinguishes actual measurements from illustrative teaching examples.</p>

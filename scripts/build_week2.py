@@ -97,17 +97,19 @@ add('A prompt produces the first token',2,
     'Use Next step twice. The four words are illustrative token labels, not a tokenizer demonstration. Prefill processes all prompt positions with a causal mask and returns logits at the final prompt position. Sampling those logits yields the first generated token. Decode step 1 feeds that generated token, adds its K/V at each layer, and predicts token 2. Decode step 2 feeds token 2 and predicts token 3. The newest sampled token enters the KV cache only when it is subsequently processed. Cache blocks represent per-token K/V across layers, not complete hidden activations. Times are schematic.',('inference','berkeley'))
 
 # 3
-add('Prefill and decode have different performance limits',1.5,
-    text(75,195,'Inference includes both phases. Let B = requests and S = prompt tokens per request.',29)+
-    table(75,244,1450,['','Prefill','One decode step'],[
-        ['New positions per request','S prompt tokens together','1 new token'],
-        ['Token rows in the dense layers','M = B × S','M = B'],
-        ['Typical bottleneck','Compute-bound','Memory-bandwidth-bound'],
-        ['Dominant cost in that regime','Performing arithmetic','Moving data from HBM'],
-    ],[.32,.34,.34],row_h=84,size=27)+
-    text(75,706,'Typical regime: a sufficiently long prompt, or decode with a small batch.',27,color=MUTED)+
-    takeaway('The crucial difference is how much work each loaded weight supports.'),
-    'Inference is the overall task, with both prefill and decode phases. Compute-bound means arithmetic throughput is the main rate limit; memory-bandwidth-bound means the rate of moving bytes is the main limit. It does not mean running out of memory. Flatten the request and new-token dimensions into M token rows for a dense projection or MLP. Prefill has M=B×S; ordinary decode has M=B because only one new token per request is ready. Long prompts often provide enough reuse to reach compute limits, whereas small decode batches often do not. Short prefills and large batched decode can behave differently, and operators within a pass can have different bottlenecks. The following slides derive this behavior from the dense-layer workload.',('inference','berkeley'))
+add('New token rows are only part of the workload',1,
+    text(75,193,'M counts new hidden-state rows. B = requests, S = prompt tokens per request.',29)+
+    table(75,235,1450,['At one Transformer layer','Prefill (no cached prefix)','One ordinary decode step'],[
+        ['New rows through projections / MLP','M = B × S','M = B'],
+        ['Example: B = 2, S = 4','8 new rows','2 new rows'],
+        ['Weights needed','Layer weights','The same layer weights'],
+        ['Attention uses','Prompt K/V, with a causal mask','Cached + current K/V'],
+        ['KV cache update','Store B × S new positions','Append B new positions'],
+    ],[.35,.325,.325],row_h=74,size=26)+
+    text(75,713,'KV caching avoids recomputing old positions. Each new query still uses their K/V.',29,700)+
+    takeaway('New token count does not measure total memory traffic.',
+              'Memory traffic here means HBM reads/writes inside the GPU, not sending token IDs from the CPU.'),
+    'M is a count of newly processed token positions, not bytes transferred. At one layer a dense projection or MLP acts on M hidden-state vectors, each with many scalar values. In an uncached prefill every prompt position must be processed to build its per-layer K/V and support later causal positions, even when only the last position produces the next-token prediction. For B=2 and S=4 this is eight positions. In ordinary autoregressive decode, each request feeds its most recently generated token, so two requests supply two new positions. Earlier positions do not need to pass through the projections and MLP again because their K/V has been retained. However each new query still attends to the relevant cached keys and values plus the current position. Weight reads also remain: model weights already reside in GPU HBM, but arithmetic needs to load weight tiles into on-chip storage. This is separate from CPU-to-GPU transfer of token IDs. New hidden-state traffic, weight traffic, historical KV reads, new KV writes, and other intermediates all contribute to physical memory traffic. The cache is not a promise that all historical KV fits on chip. Prefix-cache hits, speculative multi-token decoding, and ragged prompt batches are outside this simple shape comparison.',('inference','berkeley'))
 
 # More token rows reuse the same dense-layer weights.
 add('Many token rows reuse the same weights',2,
@@ -115,13 +117,14 @@ add('Many token rows reuse the same weights',2,
     text(75,269,'Decode, one request',30,700,color=BLUE)+
     label_box(75,315,255,60,'1 token row',size=29)+text(369,355,'×',37)+
     label_box(430,282,365,145,'Weights W',size=31)+arrow(823,355,925,355)+label_box(955,315,255,60,'1 output row',size=29)+
-    lines(1260,321,['Each weight does', 'little work before', 'the next load.'],26)+
+    lines(1260,321,['The weight matrix', 'is still read, for', 'just one new row.'],26)+
     line(75,465,1525,465)+text(75,513,'Prefill, one long prompt',30,700,color=BLUE)+
     ''.join(label_box(75,543+j*37,255,33,'Token rows' if j==1 else '',size=24) for j in range(4))+
     text(369,620,'×',37)+label_box(430,543,365,145,'The same W',size=31)+arrow(823,620,925,620)+
     ''.join(label_box(955,543+j*37,255,33,'Output rows' if j==1 else '',size=24) for j in range(4))+
     lines(1260,573,['Reuse a weight tile', 'across many rows', 'while it is on chip.'],26)+
-    takeaway('Prefill increases arithmetic much faster than it increases weight traffic.'),
+    takeaway('Prefill performs more arithmetic per weight loaded from HBM.',
+              'Small-batch decode can move fewer total bytes yet spend most of its time moving them.'),
     'The difference is matrix-vector versus matrix-matrix work, not different learned weights. With one decode request, a weight contributes to the output for one new token. With a prompt, the same weight contributes to many output rows. Tiled matrix multiplication exploits this reuse in on-chip storage. The entire weight matrix does not need to fit on chip, and real kernels can reload tiles. Only the ideal accounting on the next slides assumes one HBM read for each input. Causal masking restricts attention dependencies, but the tokenwise dense projections and MLP at each layer can still process all available prompt positions together.',('inference','matmul'))
 
 add('Arithmetic intensity connects reuse to the bottleneck',2,
@@ -132,9 +135,9 @@ add('Arithmetic intensity connects reuse to the bottleneck',2,
         ['Arithmetic intensity I','FLOPs / bytes = MDF / (MD + DF + MF)'],
     ],[.46,.54],row_h=78,size=28)+
     text(75,610,'If weight traffic dominates: I ≈ M FLOPs/byte',34,700,color=BLUE)+
-    text(75,672,'Compare I with the GPU’s compute peak / HBM bandwidth.',30)+
-    takeaway('Below that ratio: a bandwidth limit. Above it: a compute limit.',
-              'This roofline model assumes overlap and excludes launch overhead and extra data movement.'),
+    text(75,664,'Compute time ≥ FLOPs / compute peak. Transfer time ≥ bytes / HBM bandwidth.',28)+
+    takeaway('Compare the two resource times for the same operation.',
+              'The larger time is the ideal bottleneck. Launch overhead and extra traffic can add further limits.'),
     'M is the number of token rows, D the input dimension, and F the output dimension. There are MF output values, each formed from D multiply-add pairs. Counting one multiply and one add as two FLOPs gives 2MDF. BF16 uses two bytes, giving 2MD bytes for X, 2DF for W, and 2MF for Y in this idealized cold-HBM accounting. Divide to obtain intensity. When M is small relative to D and F, DF dominates the denominator, so I≈M. This approximation is not valid for arbitrarily large M. Compute time floor is FLOPs/C, and HBM time floor is bytes/BW. With overlap, the idealized time is their maximum; their crossover is I=C/BW. These are theoretical resource ceilings/lower bounds, not measured runtimes. Actual traffic, cache behavior, launch latency and hardware utilization matter.',('matmul','inference'))
 
 def matmul_cost(m, d=8192, f=8192):
@@ -182,27 +185,37 @@ add('The KV cache saves work on earlier tokens',1.5,
     'For a fixed causal model, earlier token representations do not depend on newly generated future tokens, so their K/V can be retained. At each layer we compute the current token’s q, k, and v, append k and v to that layer’s cache, and attend over the relevant past positions plus the current position. Only the current hidden state proceeds through the rest of the network. We normally do not cache old queries for standard next-token decoding. Requests use common read-only model weights but different K/V because their token histories differ.',('inference',))
 
 # 5
-add('Question 1: Why can cached decoding still slow down?',.5,
-    lines(75,217,['The same model runs on the same GPU.', 'Batch size is 1. KV caching is already enabled.'],34,gap=55)+
-    text(75,390,'Short history',29,700)+''.join(rect(380+i*77,350,65,65,PALE) for i in range(4))+
-    text(75,508,'Long history',29,700)+''.join(rect(380+i*77,468,65,65,PALE) for i in range(12))+
-    lines(75,625,['Why might generating the next token take longer?', 'What did the cache save, and what work remains?'],34,weight=700,color=BLUE)+
-    text(75,798,'Discuss the data movement. No arithmetic is needed.',27,color=MUTED),
-    'Pause before advancing. Invite a distinction between constructing the historical K/V and reading it for a new query. Hold model, hardware, precision, and batch size fixed. We ask why latency might increase, not for an exact proportionality. The rectangles represent historical positions. This is an authored discussion question.',('inference',))
+add('Question 1: Why did a larger decode batch stop helping?',1,
+    lines(75,193,[
+        'Same model, GPU, precision, and cached length S. All batches fit in HBM.',
+        'KV caching is enabled. Time steady decoding, excluding prefill and queueing.',
+    ],29,gap=45)+
+    line(75,282,1525,282)+
+    text(75,332,'A performance diagnosis scenario',29,700,color=BLUE)+
+    text(75,394,'Doubling batch size B barely increases aggregate output tokens/s.',32,700)+
+    text(75,450,'A teammate claims: “We hit the compute ceiling. Optimize the GEMMs.”',30)+
+    line(75,491,1525,491)+
+    text(75,552,'1. How do weight reads and historical KV reads scale with B?',30,700)+
+    text(75,616,'2. Does the observation support the teammate’s conclusion?',30,700)+
+    text(75,680,'3. Design a controlled experiment that separates the possible limits.',30,700,color=BLUE)+
+    text(75,802,'Authored diagnostic scenario. The throughput observation is hypothetical.',25,color=MUTED),
+    'Ask for a diagnosis with competing explanations, not a memorized prefill/decode label. This is an authored hypothetical case, not measured data or a reported company interview question. All batches fit without offloading; model, precision and implementation remain fixed. Sequence length is held fixed within a comparison. With ordinary one-token decode, a B-request batch produces B output tokens per step. Little throughput improvement after doubling B means the step duration has risen close to twofold. That can happen because per-request KV traffic scales with B, because arithmetic saturates compute throughput, or because per-request host/dispatch work grows with B. Fixed per-step launch overhead alone would usually allow throughput to grow with B rather than explain a plateau. The observation alone cannot distinguish these. An ideal weight-read budget is amortized over the batch, while unrelated requests generally have separate KV histories. Ask what evidence would disprove the proposed diagnosis before selecting an optimization.',('inference','matmul'))
 
 # 6
-add('Solution 1: The cache still has to be read',1,
-    text(75,205,'For each layer of full-context attention',31,700)+
-    label_box(75,255,250,90,'Current query q')+arrow(325,300,420,300)+
-    label_box(420,255,440,90,'Compare q with cached keys')+arrow(860,300,965,300)+
-    label_box(965,255,530,90,'Weight and combine cached values')+
-    lines(75,425,['Longer history means more K/V values to read.', 'It also means more query–key and weighted-value arithmetic.'],33,gap=58)+
-    line(75,545,1525,545)+
-    text(75,602,'Saved work',29,700,color=BLUE)+text(425,602,'Recomputing earlier tokens through the network',29)+
-    text(75,661,'Remaining work',29,700,color=BLUE)+text(425,661,'Applying the new query to the relevant history',29)+
-    takeaway('Longer context can slow attention even when the cache works perfectly.',
-              'Whole-model latency also includes weights, other operators, and launch overhead.'),
-    'The new query changes at each decode step. Its dot products with the historical keys and its weighted sum of historical values must therefore be computed again. KV caching eliminates rebuilding those historical states, not using them. Under ordinary full-context attention, K/V traffic and attention arithmetic grow with context length. Whole-model latency need not double when context doubles, because other costs remain. Sliding-window, sparse, and compressed attention can change this pattern and are outside this example.',('inference',))
+add('Solution 1: A throughput plateau does not identify the limit',1,
+    text(75,191,'W = weight bytes read per step. K(S) = KV bytes read per request.',28)+
+    text(75,249,'Ideal reads per step ≈ W + B × K(S)',34,700,color=BLUE)+
+    text(75,302,'Per output token ≈ W/B + K(S)',33,700)+
+    text(75,351,'KV-dominated limit: doubling B doubles KV reads and output tokens; throughput can stay flat.',27)+
+    table(75,386,1450,['Possible limit','Evidence needed before choosing a fix'],[
+        ['Historical KV bandwidth','Attention dominates; HBM bandwidth near its achievable limit'],
+        ['Dense-layer compute','Dense kernels dominate near achievable compute throughput'],
+        ['Per-request host work','Host time grows with B; GPU idle gaps'],
+    ],[.32,.68],row_h=72,size=27)+
+    text(75,715,'Sweep B at fixed S, then S at fixed B. Profile attention and dense layers separately.',28,700)+
+    takeaway('Faster GEMMs help only if their execution is a material part of the bottleneck.',
+              'Ideal reads omit activations and other traffic, and assume one weight read per batch with no prefix reuse.'),
+    'Let W be the bytes of weights ideally fetched once during one complete decode step, and K(S) the bytes of required K/V fetched for one request across layers. Both are traffic quantities under stated assumptions, not a measurement of reserved memory. Ideal weight-plus-KV reads are W+B K(S); divide by the B emitted tokens to get W/B+K(S). In a bandwidth-dominated model, step time is approximately (W+B K(S))/BW and aggregate output rate is approximately BW/(W/B+K(S)). If B K(S) dominates W, doubling B approximately doubles both step time and emitted tokens, so throughput approaches BW/K(S) even while bandwidth remains the limit. Compute can instead dominate, and the plateau alone proves neither case. Profile time attributed to dense layers versus attention, measured memory traffic and achieved bandwidth, relevant compute throughput, and host/GPU idle gaps. A large byte count alone does not prove bandwidth saturation. Distinguish bandwidth near an achievable ceiling from memory-latency or parallelism problems. Batch-independent launch overhead by itself would generally be amortized as B grows; per-request host/dispatch work that grows with B can instead limit aggregate throughput. Vary B at fixed S and then S at fixed B, keeping weights, GPU, dtype and timing boundaries fixed. Both attention arithmetic and KV traffic increase with S, so a length sweep alone is not proof of a bandwidth limit. Compare counters and kernel timings together. Real caches, rereads, allocations, ragged lengths, shared prefixes and extra intermediates can change the ideal traffic model. No universal speedup or single numeric batch threshold follows from this exercise.',('inference','matmul'))
 
 # 7
 add('Batching affects weight traffic and KV traffic differently',2,
@@ -554,14 +567,14 @@ ORDER=[
     'LLM inference performance',
     'Latency and throughput measure different things',
     'A prompt produces the first token',
-    'Prefill and decode have different performance limits',
+    'New token rows are only part of the workload',
     'Many token rows reuse the same weights',
     'Arithmetic intensity connects reuse to the bottleneck',
     'H100 example: same weights, different bottlenecks',
     'The KV cache saves work on earlier tokens',
     'KV memory limits how many requests fit',
-    'Question 1: Why can cached decoding still slow down?',
-    'Solution 1: The cache still has to be read',
+    'Question 1: Why did a larger decode batch stop helping?',
+    'Solution 1: A throughput plateau does not identify the limit',
     'Batching affects weight traffic and KV traffic differently',
     'Continuous batching replaces finished requests',
     'PagedAttention reduces wasted KV capacity',
@@ -587,7 +600,7 @@ assert set(ORDER)==set(by_title), set(by_title)^set(ORDER)
 slides=[by_title[t] for t in ORDER]
 # Existing timings are planning estimates; the detailed derivation is readable
 # in the deck even when the presenter chooses a shorter route.
-for i,t in {3:1.5,4:1,5:1,6:1.5,7:1.5,8:1,10:.5,11:.75,12:1,14:1.5,15:1.5,16:1,22:.5,25:1,28:1.5,29:1,30:.5}.items():
+for i,t in {3:1.5,4:1,5:1,6:1.5,7:1.5,8:1,10:1,11:1,12:1,14:1.5,15:1.5,16:1,22:.5,25:1,28:1.5,29:1,30:.5}.items():
     slides[i-1]['minutes']=t
 TOTAL_MINUTES=sum(s['minutes'] for s in slides)
 SHORT_SKIP=[6,7,25,29,30]

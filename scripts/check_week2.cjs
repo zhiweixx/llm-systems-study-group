@@ -14,7 +14,7 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'.build/week2-qa');
   const settle=()=>page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
   await settle();
   const slides=await page.locator('.slide').evaluateAll(ss=>ss.map(s=>({id:s.id,title:s.dataset.title,minutes:Number(s.dataset.minutes)})));
-  assert.equal(slides.length,31);assert.equal(slides.reduce((n,s)=>n+s.minutes,0),36);
+  assert.equal(slides.length,31);assert.equal(slides.reduce((n,s)=>n+s.minutes,0),36.75);
   const issues=[];
   async function inspect(label){
     const result=await page.locator('.slide:not([hidden]) svg').evaluate(svg=>{
@@ -95,6 +95,6 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'.build/week2-qa');
   assert.deepEqual(await page.evaluate(()=>window.week2Examples.pagingState()),pagingBefore);
   await fs.writeFile(path.join(out,'review.json'),JSON.stringify({slides,issues,errors,requests,pagingStates},null,2));
   await browser.close();
-  console.log(JSON.stringify({slides:slides.length,minutes:36,issues,errors,requests},null,2));
+  console.log(JSON.stringify({slides:slides.length,minutes:36.75,issues,errors,requests},null,2));
   assert.deepEqual(errors,[]);assert.deepEqual(requests,[]);assert.deepEqual(issues,[]);
 })().catch(e=>{console.error(e);process.exit(1);});
