@@ -14,7 +14,7 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'.build/week2-qa');
   const settle=()=>page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
   await settle();
   const slides=await page.locator('.slide').evaluateAll(ss=>ss.map(s=>({id:s.id,title:s.dataset.title,minutes:Number(s.dataset.minutes)})));
-  assert.equal(slides.length,31);assert.equal(slides.reduce((n,s)=>n+s.minutes,0),36.75);
+  assert.equal(slides.length,33);assert.equal(slides.reduce((n,s)=>n+s.minutes,0),36.75);
   const issues=[];
   async function inspect(label){
     const result=await page.locator('.slide:not([hidden]) svg').evaluate(svg=>{
@@ -82,7 +82,7 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'.build/week2-qa');
   assert.match(await page.locator('#slide-23 pre').textContent(),/torch.cat/);
   await page.evaluate(()=>{location.hash='slide-20';});await settle();
   await page.locator('#notes-toggle').click();assert.match(await page.locator('#notes-content').innerText(),/17.310/);await page.keyboard.press('Escape');
-  await page.locator('#overview-toggle').click();assert.equal(await page.locator('.overview-item').count(),31);await page.keyboard.press('Escape');
+  await page.locator('#overview-toggle').click();assert.equal(await page.locator('.overview-item').count(),33);await page.keyboard.press('Escape');
   for(const [width,height] of [[1280,770],[1024,650],[768,560]]){
     await page.setViewportSize({width,height});await settle();
     const b=await page.locator('#stage').boundingBox();assert.ok(b.x>=-1&&b.y>=-1&&b.x+b.width<=width+1);

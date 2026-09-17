@@ -32,6 +32,7 @@ SOURCES = {
     'vllm': ('vLLM: PagedAttention', 'https://vllm-project.github.io/2023/06/20/vllm.html'),
     'distserve': ('DistServe (OSDI 2024)', 'https://www.usenix.org/conference/osdi24/presentation/zhong-yinmin'),
     'pd': ('vLLM: disaggregated prefill', 'https://docs.vllm.ai/en/latest/features/disagg_prefill/'),
+    'triton_gemm': ('Triton: Matrix Multiplication', 'https://triton-lang.org/main/getting-started/tutorials/03-matrix-multiplication.html'),
 }
 
 def text(x, y, value, size=30, weight=400, color=INK, anchor='start', attrs=''):
@@ -561,6 +562,36 @@ add('Chunked prefill limits work between decode steps',1,
               'Schematic schedules, not measured durations. Chunk size must respect both latency goals.'),
     'The timeline illustrates bounded prompt work between decode opportunities. It is deliberately schematic: rows do not promise equal total time or a numeric speedup. A scheduler may also place prefill chunks and decode tokens in the same step, using a token budget. Splitting a prompt does not remove causal dependencies or the need to access previous K/V; it changes how much new prompt work is scheduled at once. Too-small chunks can increase scheduling/launch overhead and reduce GEMM efficiency. The next slide contrasts this colocated strategy with spatially separate prefill/decode pools. For deployment compare under a fixed GPU budget and input/output length distribution, rather than assuming separation is always necessary.',('berkeley_chunk','distserve'))
 
+add('Question 3: Take-home — implement GEMM in Triton',0,
+    text(75,194,'Implement C = A @ B for contiguous, row-major FP16 matrices on one GPU.',29)+
+    label_box(75,232,1450,65,'A[M, K] × B[K, N] = C[M, N]',size=33)+
+    text(75,352,'Implementation',31,700,color=BLUE)+
+    lines(75,402,['Compute one output tile per program.', 'Loop over K tiles using tl.dot.', 'FP32 accumulation; FP16 output.', 'Handle M, N, and K boundaries safely.'],28,gap=48)+
+    line(790,327,790,556)+
+    text(830,352,'Validation and timing',31,700,color=BLUE)+
+    lines(830,402,['Check torch.matmul with stated tolerances.', 'Measure steady-state GPU time.', 'Exclude compilation and autotuning.', 'Record hardware, shapes, and max error.'],28,gap=48)+
+    line(75,574,1525,574)+
+    text(75,614,'Test (M, N, K): (128, 256, 128), (127, 193, 259), and (1, 7, 3).',28)+
+    text(75,662,'Deliver: kernel, launch wrapper, tests, and a short benchmark.',28)+
+    text(75,708,'Optional: tune tile sizes and group programs for L2 reuse.',28)+
+    takeaway('Explain one optimization using your measurements.',
+              'Based on the Triton tutorial. Complete after the meeting; reference solution follows.'),
+    'This is a take-home assignment adapted from the official Triton Matrix Multiplication tutorial, not an in-class coding task or a reported company interview question. Zero minutes means no additional planned lecture time; the assignment can be announced at the end. Implement a positive-dimension, contiguous row-major FP16 GEMM with an FP32 accumulator and FP16 output. tl.dot is permitted; calling torch.matmul or cuBLAS as the implementation is not. PyTorch is the validation baseline. Start with fixed tile sizes, map each program to one output tile, and iterate over K tiles. Handle invalid M/N input positions safely and zero-fill invalid K positions; mask output stores. The official reference wraps M/N load indices, so load masks are not the only valid approach. Test the three visible (M,N,K) cases, state rtol/atol, and report maximum error rather than requiring bitwise equality. Warm up and use CUDA events or a GPU benchmark utility, excluding compilation and autotuning from steady-state timing. Compare against torch.matmul under matching conditions. Grouped program ordering and autotuning are optional extensions. No requirement to outperform cuBLAS; the goal is a correct implementation and an explanation supported by measurements.',('triton_gemm',))
+
+add('Solution 3: Triton GEMM tutorial',0,
+    text(75,195,'Official worked solution, executable implementation, tests, and benchmarks.',30)+
+    f'<a href="{SOURCES["triton_gemm"][1]}" target="_blank" rel="noopener">'+
+    text(75,272,'Open the solution: Triton Matrix Multiplication',36,600,color=BLUE,attrs='text-decoration="underline"')+'</a>'+
+    table(75,334,1450,['Tutorial section','What to compare with your implementation'],[
+        ['Compute kernel / pointer arithmetic','Output tiles, addresses, K loop, and boundary handling'],
+        ['L2 cache optimizations','Grouped program ordering to improve data reuse'],
+        ['Final result','Launch configuration and autotuning'],
+        ['Unit test / benchmark','Numerical correctness and measured performance'],
+    ],[.38,.62],row_h=73,size=27)+
+    takeaway('Compare the reference with your first implementation.',
+              'Performance depends on the GPU, matrix shapes, and launch configuration.'),
+    'The large underlined title and footer both link directly to the user-requested official tutorial: https://triton-lang.org/main/getting-started/tutorials/03-matrix-multiplication.html. Use it as the reference solution after attempting the preceding take-home exercise. The tutorial supplies a blocked FP16 GEMM with FP32 accumulation, pointer arithmetic, boundary handling, grouped program ordering, autotuning, correctness checks, and benchmark code. Its displayed speedups are examples for particular environments, not a target or promise for every GPU and shape. This reference slide is outside the planned lecture time. The slide itself works offline; opening the external solution requires internet access.',('triton_gemm',))
+
 # Keep sources/notes attached to their content while reorganizing the narrative.
 by_title={s['title']:s for s in slides}
 ORDER=[
@@ -595,6 +626,8 @@ ORDER=[
     'Experiment: sweep batch size on one GPU',
     'A measurement should test a bottleneck hypothesis',
     'Discussion',
+    'Question 3: Take-home — implement GEMM in Triton',
+    'Solution 3: Triton GEMM tutorial',
 ]
 assert set(ORDER)==set(by_title), set(by_title)^set(ORDER)
 slides=[by_title[t] for t in ORDER]
@@ -605,12 +638,12 @@ for i,t in {3:1.5,4:1,5:1,6:1.5,7:1.5,8:1,10:1,11:1,12:1,14:1.5,15:1.5,16:1,22:.
 TOTAL_MINUTES=sum(s['minutes'] for s in slides)
 SHORT_SKIP=[6,7,25,29,30]
 SHORT_MINUTES=TOTAL_MINUTES-sum(slides[n-1]['minutes'] for n in SHORT_SKIP)
-slides[0]['body']=text(75,205,'09/17/26',30,color=MUTED)+lines(75,305,['Why does generation slow down,', 'and which part of the system should change?'],43,weight=700)+line(75,410,1525,410)+text(75,475,'Workload and limits',31,700,color=BLUE)+text(635,475,'Prefill, decode, weight reuse, and KV memory',28)+line(75,515,1525,515)+text(75,580,'Attention and storage',31,700,color=BLUE)+text(635,580,'Online softmax, FlashAttention, and paging',28)+line(75,620,1525,620)+text(75,683,'Serving behavior',31,700,color=BLUE)+text(635,683,'Batch membership, interference, and PD',28)+text(75,796,f'{len(slides)} slides with worked derivations and two diagnostic questions',27,color=MUTED)
-slides[0]['notes']=f'Audience: Transformer/PyTorch familiarity with little GPU systems background. Follow the causal chain from latency metrics and matrix shapes to memory allocation, attention IO, and serving schedules. The complete deck has {TOTAL_MINUTES:g} minutes of suggested content. A roughly {SHORT_MINUTES:g}-minute route skips slides {", ".join(map(str,SHORT_SKIP))}. All derivations and the worked example remain visible in the deck. Reserve 15 minutes for discussion. Questions are authored exercises, not attributed company interview reports. The only empirical figure is clearly attributed to DistServe; other diagrams are schematic and H100 bars are theoretical resource bounds.'
-slides[-1]['notes']=f'Use the remaining discussion time to ask what observation could falsify a proposed bottleneck. The full route is {TOTAL_MINUTES:g} minutes; a roughly {SHORT_MINUTES:g}-minute route skips {", ".join(map(str,SHORT_SKIP))}. Week 3 develops multi-GPU parallelism and Week 4 studies scheduling, prefix reuse and serving policies in depth. Revisit the paged-prototype diagnostic if participants confuse memory allocation with the attention kernel.'
+slides[0]['body']=text(75,205,'09/17/26',30,color=MUTED)+lines(75,305,['Why does generation slow down,', 'and which part of the system should change?'],43,weight=700)+line(75,410,1525,410)+text(75,475,'Workload and limits',31,700,color=BLUE)+text(635,475,'Prefill, decode, weight reuse, and KV memory',28)+line(75,515,1525,515)+text(75,580,'Attention and storage',31,700,color=BLUE)+text(635,580,'Online softmax, FlashAttention, and paging',28)+line(75,620,1525,620)+text(75,683,'Serving behavior',31,700,color=BLUE)+text(635,683,'Batch membership, interference, and PD',28)+text(75,796,f'{len(slides)} slides: worked derivations, two diagnostic questions, and a GEMM take-home',27,color=MUTED)
+slides[0]['notes']=f'Audience: Transformer/PyTorch familiarity with little GPU systems background. Follow the causal chain from latency metrics and matrix shapes to memory allocation, attention IO, and serving schedules. The complete deck has {TOTAL_MINUTES:g} minutes of suggested content. A roughly {SHORT_MINUTES:g}-minute route skips slides {", ".join(map(str,SHORT_SKIP))}. All derivations and the worked example remain visible in the deck. Reserve 15 minutes for discussion. Slides 32–33 are a take-home GEMM assignment and its reference solution, outside the lecture timing. Questions are authored exercises, not attributed company interview reports. The only empirical figure is clearly attributed to DistServe; other diagrams are schematic and H100 bars are theoretical resource bounds.'
+by_title['Discussion']['notes']=f'Use the remaining discussion time to ask what observation could falsify a proposed bottleneck. The full route is {TOTAL_MINUTES:g} minutes; a roughly {SHORT_MINUTES:g}-minute route skips {", ".join(map(str,SHORT_SKIP))}. Week 3 develops multi-GPU parallelism and Week 4 studies scheduling, prefix reuse and serving policies in depth. Revisit the paged-prototype diagnostic if participants confuse memory allocation with the attention kernel.'
 
 def build():
-    assert len(slides)==31
+    assert len(slides)==33
     css=(ASSETS/'base.css').read_text()+'''.math-block{height:100%;display:flex;align-items:center;justify-content:flex-start;color:#172329}.math-block math{font-size:inherit}.code-block{margin:0;padding:18px 22px;line-height:1.4;background:#f4f6f8;border-left:3px solid #245675;font-family:ui-monospace,Menlo,Consolas,monospace;white-space:pre}@media print{.math-block,.code-block{break-inside:avoid}}'''+'''\nsvg{font-family:Arial,Helvetica,sans-serif}svg text{font-family:Arial,Helvetica,sans-serif}.interaction{font:25px Arial,Helvetica,sans-serif;display:flex;gap:16px;align-items:center;color:#245675}.interaction button,.interaction select{font:24px Arial,Helvetica,sans-serif;border:1px solid #aec3d1;color:#245675;background:white;padding:10px 17px;cursor:pointer}.interaction button:hover{background:#edf3f7}.interaction button:disabled{color:#88939a;cursor:default}.interaction.vertical{align-items:flex-start;flex-direction:column;gap:12px}.interaction a{font-size:23px}.interaction label{display:flex;gap:18px;align-items:center}button:focus-visible,select:focus-visible{outline:3px solid #397b71;outline-offset:3px}@media print{.interaction button,.interaction select{display:none}.interaction{font-size:23px}}\n'''
     parts=[]
     notes=['# Week 2 speaker notes', '', f'LLM inference performance. {len(slides)} slides, {TOTAL_MINUTES:g} minutes of suggested full content. A roughly {SHORT_MINUTES:g}-minute route skips slides {", ".join(map(str,SHORT_SKIP))}. Reserve 15 minutes for discussion.', '', 'The HTML deck works offline. All online-softmax derivations and arithmetic remain on the slides. The generation and block-table diagrams have step controls. The DistServe plot is an attributed published experiment; the H100 bars are theoretical bounds, and the remaining diagrams are schematic.', '']
@@ -632,9 +665,9 @@ def build():
         for key in s['sources']:
             label,url=SOURCES[key];notes+=[f'- [{label}]({url})']
         notes+=['']
-    chrome='''<nav class="deck-chrome" aria-label="Presentation controls"><div class="chrome-left"><button id="prev" type="button" aria-label="Previous slide">←</button><span id="counter" aria-live="polite">1 / 31</span><button id="next" type="button" aria-label="Next slide">→</button><span id="slide-title"></span></div><div class="chrome-right"><button id="overview-toggle" type="button">Slides</button><button id="notes-toggle" type="button">Notes</button><button id="fullscreen" type="button">Full screen</button><button id="print" type="button">Print / PDF</button><button id="help-toggle" type="button" aria-label="Keyboard help">?</button></div></nav>
+    chrome='''<nav class="deck-chrome" aria-label="Presentation controls"><div class="chrome-left"><button id="prev" type="button" aria-label="Previous slide">←</button><span id="counter" aria-live="polite">1 / 33</span><button id="next" type="button" aria-label="Next slide">→</button><span id="slide-title"></span></div><div class="chrome-right"><button id="overview-toggle" type="button">Slides</button><button id="notes-toggle" type="button">Notes</button><button id="fullscreen" type="button">Full screen</button><button id="print" type="button">Print / PDF</button><button id="help-toggle" type="button" aria-label="Keyboard help">?</button></div></nav>
 <section id="notes-panel" class="deck-overlay" hidden><div class="panel-header"><h2>Speaker notes</h2><button data-close-overlay="true" type="button">Close</button></div><div id="notes-content"></div></section>
-<section id="overview-panel" class="deck-overlay" hidden><div class="panel-header"><h2>31 slides</h2><button data-close-overlay="true" type="button">Close</button></div><div id="overview-list"></div></section>
+<section id="overview-panel" class="deck-overlay" hidden><div class="panel-header"><h2>33 slides</h2><button data-close-overlay="true" type="button">Close</button></div><div id="overview-list"></div></section>
 <section id="help-panel" class="deck-overlay" hidden><div class="panel-header"><h2>Presentation controls</h2><button data-close-overlay="true" type="button">Close</button></div><p>Arrow keys: change slides. Home / End: first / last slide. Escape: close a panel.</p><p>Use Next step inside a diagram to advance its example. Each solution follows its question. Notes includes assumptions and sources.</p><p>Print / PDF shows completed interactive examples. Online-softmax steps each have their own slide.</p></section>'''
     js=(ASSETS/'navigation.js').read_text()+'\n'+(ASSETS/'interactions.js').read_text()
     html='<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>LLM inference performance · 09/17/26</title><style>'+css+'</style></head><body><main id="viewport" aria-label="Presentation"><div id="stage">'+''.join(parts)+'</div></main>'+chrome+'<script>'+js+'</script></body></html>'

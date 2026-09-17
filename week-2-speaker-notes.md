@@ -1,6 +1,6 @@
 # Week 2 speaker notes
 
-LLM inference performance. 31 slides, 36.75 minutes of suggested full content. A roughly 31.25-minute route skips slides 6, 7, 25, 29, 30. Reserve 15 minutes for discussion.
+LLM inference performance. 33 slides, 36.75 minutes of suggested full content. A roughly 31.25-minute route skips slides 6, 7, 25, 29, 30. Reserve 15 minutes for discussion.
 
 The HTML deck works offline. All online-softmax derivations and arithmetic remain on the slides. The generation and block-table diagrams have step controls. The DistServe plot is an attributed published experiment; the H100 bars are theoretical bounds, and the remaining diagrams are schematic.
 
@@ -8,7 +8,7 @@ The HTML deck works offline. All online-softmax derivations and arithmetic remai
 
 **Suggested time: 0.5 minutes.**
 
-Audience: Transformer/PyTorch familiarity with little GPU systems background. Follow the causal chain from latency metrics and matrix shapes to memory allocation, attention IO, and serving schedules. The complete deck has 36.75 minutes of suggested content. A roughly 31.25-minute route skips slides 6, 7, 25, 29, 30. All derivations and the worked example remain visible in the deck. Reserve 15 minutes for discussion. Questions are authored exercises, not attributed company interview reports. The only empirical figure is clearly attributed to DistServe; other diagrams are schematic and H100 bars are theoretical resource bounds.
+Audience: Transformer/PyTorch familiarity with little GPU systems background. Follow the causal chain from latency metrics and matrix shapes to memory allocation, attention IO, and serving schedules. The complete deck has 36.75 minutes of suggested content. A roughly 31.25-minute route skips slides 6, 7, 25, 29, 30. All derivations and the worked example remain visible in the deck. Reserve 15 minutes for discussion. Slides 32–33 are a take-home GEMM assignment and its reference solution, outside the lecture timing. Questions are authored exercises, not attributed company interview reports. The only empirical figure is clearly attributed to DistServe; other diagrams are schematic and H100 bars are theoretical resource bounds.
 
 
 ## 2. Latency and throughput measure different things
@@ -283,3 +283,19 @@ Use the remaining discussion time to ask what observation could falsify a propos
 - [CS336 Lecture 10](https://cs336.stanford.edu/lectures/?trace=lecture_10)
 - [CS336 Lecture 5, pp. 52–54](https://raw.githubusercontent.com/stanford-cs336/lectures/main/lecture_05.pdf#page=52)
 - [Berkeley L18, PDF pp. 9–16](https://scalable-ai.eecs.berkeley.edu/S2026/assets/lecture_slides/lecture_18.pdf#page=9)
+
+## 32. Question 3: Take-home — implement GEMM in Triton
+
+**Suggested time: 0 minutes.**
+
+This is a take-home assignment adapted from the official Triton Matrix Multiplication tutorial, not an in-class coding task or a reported company interview question. Zero minutes means no additional planned lecture time; the assignment can be announced at the end. Implement a positive-dimension, contiguous row-major FP16 GEMM with an FP32 accumulator and FP16 output. tl.dot is permitted; calling torch.matmul or cuBLAS as the implementation is not. PyTorch is the validation baseline. Start with fixed tile sizes, map each program to one output tile, and iterate over K tiles. Handle invalid M/N input positions safely and zero-fill invalid K positions; mask output stores. The official reference wraps M/N load indices, so load masks are not the only valid approach. Test the three visible (M,N,K) cases, state rtol/atol, and report maximum error rather than requiring bitwise equality. Warm up and use CUDA events or a GPU benchmark utility, excluding compilation and autotuning from steady-state timing. Compare against torch.matmul under matching conditions. Grouped program ordering and autotuning are optional extensions. No requirement to outperform cuBLAS; the goal is a correct implementation and an explanation supported by measurements.
+
+- [Triton: Matrix Multiplication](https://triton-lang.org/main/getting-started/tutorials/03-matrix-multiplication.html)
+
+## 33. Solution 3: Triton GEMM tutorial
+
+**Suggested time: 0 minutes.**
+
+The large underlined title and footer both link directly to the user-requested official tutorial: https://triton-lang.org/main/getting-started/tutorials/03-matrix-multiplication.html. Use it as the reference solution after attempting the preceding take-home exercise. The tutorial supplies a blocked FP16 GEMM with FP32 accumulation, pointer arithmetic, boundary handling, grouped program ordering, autotuning, correctness checks, and benchmark code. Its displayed speedups are examples for particular environments, not a target or promise for every GPU and shape. This reference slide is outside the planned lecture time. The slide itself works offline; opening the external solution requires internet access.
+
+- [Triton: Matrix Multiplication](https://triton-lang.org/main/getting-started/tutorials/03-matrix-multiplication.html)
