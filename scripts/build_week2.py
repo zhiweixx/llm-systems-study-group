@@ -300,21 +300,6 @@ add('Ordinary attention materializes large intermediates',1.5,
 
 # 14
 # 15
-add('CUDA Graphs reduce repeated launch overhead',1.5,
-    text(75,197,'Repeated execution of the same GPU work',31,700)+
-    arrow(215,222,1195,222)+text(1260,232,'Time',25,color=MUTED)+
-    text(75,285,'CPU',28,700)+text(75,363,'GPU',28,700)+
-    ''.join(label_box(215+i*200,245,148,54,'Launch',size=24)+label_box(252+i*200,326,95,54,f'K{i+1}',size=24) for i in range(5))+
-    text(1260,278,'Ordinary',28,700)+text(1260,319,'submission',28,700)+
-    line(75,427,1525,427)+
-    text(75,505,'CPU',28,700)+text(75,583,'GPU',28,700)+label_box(215,465,215,54,'Replay graph',size=24)+
-    ''.join(label_box(255+i*110,546,95,54,f'K{i+1}',size=24) for i in range(5))+
-    text(1260,498,'Captured',28,700)+text(1260,539,'execution',28,700)+
-    text(75,668,'Fusion combines operations. Graph replay submits a captured sequence of operations.',28)+
-    text(75,712,'Schematic timeline. Capture needs compatible shapes, control flow, and memory addresses.',25,color=MUTED)+
-    takeaway('Fewer CPU submissions can help when the GPU waits between short kernels.'),
-    'These timelines are schematic, not profiler measurements and not to scale. A CUDA Graph captures GPU operations and dependencies, then replays them with lower repeated host submission cost. The kernels can remain separate, which distinguishes graphs from operator fusion. Standard PyTorch capture needs stable memory addresses, capture-compatible operations, and static shapes/control flow for that captured graph. Input values can change in existing storage. Prefill lengths and growing decode history require deliberate shape/buffer handling or multiple graphs. Capture/compilation warm-up costs are separate from replay latency. Replay cannot eliminate the underlying arithmetic or required HBM traffic.',('graphs','kernels'))
-
 # A short serving extension follows the single-GPU mechanisms.
 
 add('Prefill–decode disaggregation',2,
@@ -592,7 +577,6 @@ ORDER=[
     'FlashAttention streams tiles through the running state',
     'Question 2: Is paged storage enough?',
     'Solution 2: The kernel must consume the block table',
-    'CUDA Graphs reduce repeated launch overhead',
     'A prefill can delay an ongoing decode batch',
     'Chunked prefill limits work between decode steps',
     'Prefill–decode disaggregation',
@@ -606,17 +590,17 @@ assert set(ORDER)==set(by_title), set(by_title)^set(ORDER)
 slides=[by_title[t] for t in ORDER]
 # Existing timings are planning estimates; the detailed derivation is readable
 # in the deck even when the presenter chooses a shorter route.
-for i,t in {3:1.5,4:1,5:1,6:1.5,7:1.5,8:1,10:1,11:1,12:1,14:1.5,15:1.5,16:1,23:1,26:1.5,27:1,28:.5}.items():
+for i,t in {3:1.5,4:1,5:1,6:1.5,7:1.5,8:1,10:1,11:1,12:1,14:1.5,15:1.5,16:1,25:1.5,26:1,27:.5}.items():
     slides[i-1]['minutes']=t
 TOTAL_MINUTES=sum(s['minutes'] for s in slides)
-SHORT_SKIP=[6,7,23,27,28]
+SHORT_SKIP=[6,7,26,27]
 SHORT_MINUTES=TOTAL_MINUTES-sum(slides[n-1]['minutes'] for n in SHORT_SKIP)
 slides[0]['body']=text(75,205,'09/17/26',30,color=MUTED)+lines(75,305,['Why does generation slow down,', 'and which part of the system should change?'],43,weight=700)+line(75,410,1525,410)+text(75,475,'Workload and limits',31,700,color=BLUE)+text(635,475,'Prefill, decode, weight reuse, and KV memory',28)+line(75,515,1525,515)+text(75,580,'Attention and storage',31,700,color=BLUE)+text(635,580,'Online softmax, FlashAttention, and paging',28)+line(75,620,1525,620)+text(75,683,'Serving behavior',31,700,color=BLUE)+text(635,683,'Batch membership, interference, and PD',28)+text(75,796,f'{len(slides)} slides: worked derivations, two diagnostic questions, and a GEMM take-home',27,color=MUTED)
-slides[0]['notes']=f'Audience: Transformer/PyTorch familiarity with little GPU systems background. Follow the causal chain from latency metrics and matrix shapes to memory allocation, attention IO, and serving schedules. The complete deck has {TOTAL_MINUTES:g} minutes of suggested content. A roughly {SHORT_MINUTES:g}-minute route skips slides {", ".join(map(str,SHORT_SKIP))}. The online-softmax derivation remains visible in the deck. Reserve 15 minutes for discussion. Slides 30–31 are a take-home GEMM assignment and its reference solution, outside the lecture timing. Questions are authored exercises, not attributed company interview reports. The only empirical figure is clearly attributed to DistServe; other diagrams are schematic and H100 bars are theoretical resource bounds.'
+slides[0]['notes']=f'Audience: Transformer/PyTorch familiarity with little GPU systems background. Follow the causal chain from latency metrics and matrix shapes to memory allocation, attention IO, and serving schedules. The complete deck has {TOTAL_MINUTES:g} minutes of suggested content. A roughly {SHORT_MINUTES:g}-minute route skips slides {", ".join(map(str,SHORT_SKIP))}. The online-softmax derivation remains visible in the deck. Reserve 15 minutes for discussion. Slides 29–30 are a take-home GEMM assignment and its reference solution, outside the lecture timing. Questions are authored exercises, not attributed company interview reports. The only empirical figure is clearly attributed to DistServe; other diagrams are schematic and H100 bars are theoretical resource bounds.'
 by_title['Discussion']['notes']=f'Use the remaining discussion time to ask what observation could falsify a proposed bottleneck. The full route is {TOTAL_MINUTES:g} minutes; a roughly {SHORT_MINUTES:g}-minute route skips {", ".join(map(str,SHORT_SKIP))}. Week 3 develops multi-GPU parallelism and Week 4 studies scheduling, prefix reuse and serving policies in depth. Revisit the paged-prototype diagnostic if participants confuse memory allocation with the attention kernel.'
 
 def build():
-    assert len(slides)==31
+    assert len(slides)==30
     css=(ASSETS/'base.css').read_text()+'''.math-block{height:100%;display:flex;align-items:center;justify-content:flex-start;color:#172329}.math-block math{font-size:inherit}.code-block{margin:0;padding:18px 22px;line-height:1.4;background:#f4f6f8;border-left:3px solid #245675;font-family:ui-monospace,Menlo,Consolas,monospace;white-space:pre}@media print{.math-block,.code-block{break-inside:avoid}}'''+'''\nsvg{font-family:Arial,Helvetica,sans-serif}svg text{font-family:Arial,Helvetica,sans-serif}.interaction{font:25px Arial,Helvetica,sans-serif;display:flex;gap:16px;align-items:center;color:#245675}.interaction button,.interaction select{font:24px Arial,Helvetica,sans-serif;border:1px solid #aec3d1;color:#245675;background:white;padding:10px 17px;cursor:pointer}.interaction button:hover{background:#edf3f7}.interaction button:disabled{color:#88939a;cursor:default}.interaction.vertical{align-items:flex-start;flex-direction:column;gap:12px}.interaction a{font-size:23px}.interaction label{display:flex;gap:18px;align-items:center}button:focus-visible,select:focus-visible{outline:3px solid #397b71;outline-offset:3px}@media print{.interaction button,.interaction select{display:none}.interaction{font-size:23px}}\n'''
     parts=[]
     notes=['# Week 2 speaker notes', '', f'LLM inference performance. {len(slides)} slides, {TOTAL_MINUTES:g} minutes of suggested full content. A roughly {SHORT_MINUTES:g}-minute route skips slides {", ".join(map(str,SHORT_SKIP))}. Reserve 15 minutes for discussion.', '', 'The HTML deck works offline. The online-softmax derivation remains on the slides. The generation and block-table diagrams have step controls. The DistServe plot is an attributed published experiment; the H100 bars are theoretical bounds, and the remaining diagrams are schematic.', '']
@@ -638,9 +622,9 @@ def build():
         for key in s['sources']:
             label,url=SOURCES[key];notes+=[f'- [{label}]({url})']
         notes+=['']
-    chrome='''<nav class="deck-chrome" aria-label="Presentation controls"><div class="chrome-left"><button id="prev" type="button" aria-label="Previous slide">←</button><span id="counter" aria-live="polite">1 / 31</span><button id="next" type="button" aria-label="Next slide">→</button><span id="slide-title"></span></div><div class="chrome-right"><button id="overview-toggle" type="button">Slides</button><button id="notes-toggle" type="button">Notes</button><button id="fullscreen" type="button">Full screen</button><button id="print" type="button">Print / PDF</button><button id="help-toggle" type="button" aria-label="Keyboard help">?</button></div></nav>
+    chrome='''<nav class="deck-chrome" aria-label="Presentation controls"><div class="chrome-left"><button id="prev" type="button" aria-label="Previous slide">←</button><span id="counter" aria-live="polite">1 / 30</span><button id="next" type="button" aria-label="Next slide">→</button><span id="slide-title"></span></div><div class="chrome-right"><button id="overview-toggle" type="button">Slides</button><button id="notes-toggle" type="button">Notes</button><button id="fullscreen" type="button">Full screen</button><button id="print" type="button">Print / PDF</button><button id="help-toggle" type="button" aria-label="Keyboard help">?</button></div></nav>
 <section id="notes-panel" class="deck-overlay" hidden><div class="panel-header"><h2>Speaker notes</h2><button data-close-overlay="true" type="button">Close</button></div><div id="notes-content"></div></section>
-<section id="overview-panel" class="deck-overlay" hidden><div class="panel-header"><h2>31 slides</h2><button data-close-overlay="true" type="button">Close</button></div><div id="overview-list"></div></section>
+<section id="overview-panel" class="deck-overlay" hidden><div class="panel-header"><h2>30 slides</h2><button data-close-overlay="true" type="button">Close</button></div><div id="overview-list"></div></section>
 <section id="help-panel" class="deck-overlay" hidden><div class="panel-header"><h2>Presentation controls</h2><button data-close-overlay="true" type="button">Close</button></div><p>Arrow keys: change slides. Home / End: first / last slide. Escape: close a panel.</p><p>Use Next step inside a diagram to advance its example. Each solution follows its question. Notes includes assumptions and sources.</p><p>Print / PDF shows completed interactive examples. Online-softmax steps each have their own slide.</p></section>'''
     js=(ASSETS/'navigation.js').read_text()+'\n'+(ASSETS/'interactions.js').read_text()
     html='<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>LLM inference performance · 09/17/26</title><style>'+css+'</style></head><body><main id="viewport" aria-label="Presentation"><div id="stage">'+''.join(parts)+'</div></main>'+chrome+'<script>'+js+'</script></body></html>'

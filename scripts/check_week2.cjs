@@ -14,7 +14,7 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'.build/week2-qa');
   const settle=()=>page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
   await settle();
   const slides=await page.locator('.slide').evaluateAll(ss=>ss.map(s=>({id:s.id,title:s.dataset.title,minutes:Number(s.dataset.minutes)})));
-  assert.equal(slides.length,31);assert.equal(slides.reduce((n,s)=>n+s.minutes,0),34.25);
+  assert.equal(slides.length,30);assert.equal(slides.reduce((n,s)=>n+s.minutes,0),33.25);
   const issues=[];
   async function inspect(label){
     const result=await page.locator('.slide:not([hidden]) svg').evaluate(svg=>{
@@ -76,13 +76,13 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'.build/week2-qa');
     await page.locator(`[data-step-prev="${kind}"]`).click();
   }
   assert.equal(await page.locator('#batch-chart').count(),0);
-  assert.equal(await page.locator('#slide-24 image').count(),1);
-  assert.match(await page.locator('#slide-24').textContent(),/DistServe/);
+  assert.equal(await page.locator('#slide-23 image').count(),1);
+  assert.match(await page.locator('#slide-23').textContent(),/DistServe/);
   for(let n=17;n<=19;n++)assert.ok(await page.locator(`#slide-${n} math`).count()>0);
   assert.match(await page.locator('#slide-21 pre').textContent(),/torch.cat/);
   await page.evaluate(()=>{location.hash='slide-19';});await settle();
   await page.locator('#notes-toggle').click();assert.match(await page.locator('#notes-content').innerText(),/exp\(s−m′\)/);await page.keyboard.press('Escape');
-  await page.locator('#overview-toggle').click();assert.equal(await page.locator('.overview-item').count(),31);await page.keyboard.press('Escape');
+  await page.locator('#overview-toggle').click();assert.equal(await page.locator('.overview-item').count(),30);await page.keyboard.press('Escape');
   for(const [width,height] of [[1280,770],[1024,650],[768,560]]){
     await page.setViewportSize({width,height});await settle();
     const b=await page.locator('#stage').boundingBox();assert.ok(b.x>=-1&&b.y>=-1&&b.x+b.width<=width+1);
@@ -95,6 +95,6 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'.build/week2-qa');
   assert.deepEqual(await page.evaluate(()=>window.week2Examples.pagingState()),pagingBefore);
   await fs.writeFile(path.join(out,'review.json'),JSON.stringify({slides,issues,errors,requests,pagingStates},null,2));
   await browser.close();
-  console.log(JSON.stringify({slides:slides.length,minutes:34.25,issues,errors,requests},null,2));
+  console.log(JSON.stringify({slides:slides.length,minutes:33.25,issues,errors,requests},null,2));
   assert.deepEqual(errors,[]);assert.deepEqual(requests,[]);assert.deepEqual(issues,[]);
 })().catch(e=>{console.error(e);process.exit(1);});

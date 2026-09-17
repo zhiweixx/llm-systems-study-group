@@ -21,9 +21,9 @@
 
 <section aria-labelledby="week2">
   <div class="section-heading"><h2 id="week2">Week 2: LLM inference performance</h2></div>
-  <p>Follow prefill and decode, explain weight and KV-cache traffic, and see how batching, PagedAttention, FlashAttention, and CUDA Graphs address different bottlenecks. The single-GPU core leads to a preview of separate prefill and decode GPU pools and their KV-transfer tradeoff.</p>
-  <p class="presentation-link"><a href="week-2/slides.html#slide-1">Present slides</a><span>31 slides · about 34 minutes · optional 29-minute route</span></p>
-  <p class="muted">For an approximately 29-minute presentation, skip slides 6, 7, 23, 27, and 28. This route keeps the complete online-softmax derivation on <a href="week-2/slides.html#slide-17">slides 17–19</a>. All slides remain available for reading.</p>
+  <p>Follow prefill and decode, explain weight and KV-cache traffic, and see how batching, PagedAttention, and FlashAttention address different bottlenecks. The single-GPU core leads to a preview of separate prefill and decode GPU pools and their KV-transfer tradeoff.</p>
+  <p class="presentation-link"><a href="week-2/slides.html#slide-1">Present slides</a><span>30 slides · about 33 minutes · optional 29-minute route</span></p>
+  <p class="muted">For an approximately 29-minute presentation, skip slides 6, 7, 26, and 27. This route keeps the complete online-softmax derivation on <a href="week-2/slides.html#slide-17">slides 17–19</a>. All slides remain available for reading.</p>
   <dl class="materials">
     <div><dt><a href="week-2/speaker-notes.html">Speaker notes</a></dt><dd>Teaching sequence, worked explanations, sources, and discussion guidance.</dd></div>
     <div><dt><a href="week-2/lab.html">Benchmark lab</a></dt><dd>Measure the effect of batch size on latency, output-token throughput, and memory usage.</dd></div>
@@ -34,7 +34,7 @@
     <li><a href="week-2/slides.html#slide-10">Why did a larger decode batch stop helping?</a><span>Distinguish KV bandwidth, compute, and host-work limits, then design an experiment to test the diagnosis.</span></li>
     <li><a href="week-2/slides.html#slide-21">Is paged storage enough?</a><span>Diagnose a PyTorch prototype that reconstructs dense K/V tensors from pages before every attention call.</span></li>
   </ol>
-  <p><a href="week-2/slides.html#slide-30">Take-home: implement GEMM in Triton</a>. The final slide links to the official tutorial solution. Complete this exercise after the meeting.</p>
+  <p><a href="week-2/slides.html#slide-29">Take-home: implement GEMM in Triton</a>. The final slide links to the official tutorial solution. Complete this exercise after the meeting.</p>
   <p class="muted">Each question is followed by a solution slide. The benchmark lab distinguishes actual measurements from illustrative teaching examples.</p>
 </section>
 
