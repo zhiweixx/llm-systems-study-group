@@ -408,28 +408,19 @@ add('Latency and throughput measure different things',1,
     'Start with user-visible behavior before optimization names. Arrival is the chosen service boundary. TTFT runs to the first delivered output token and includes queueing, tokenization, prefill, sampling and delivery overhead. ITL is an interval between successive delivered tokens; a per-request average of these intervals is often called TPOT. Aggregate output throughput counts tokens across requests in a time window. The drawn distances have no numeric time scale. Rates in the fixed-batch lab exclude the first output token and are not production latency percentiles.',('inference','berkeley'))
 
 add('KV memory limits how many requests fit',1,
-    text(75,193,'KV memory = bytes per cached token × total cached tokens',32,700,color=BLUE)+
-    text(75,232,'Example: 32 layers; BF16; K and V each contain 4,096 numbers per token per layer.',26)+
-    text(75,307,'1. One token, one layer',29,700)+
-    text(75,350,'BF16: 2 bytes per number',26)+
-    label_box(585,271,405,60,'K: 4,096 numbers',size=28)+
-    text(1030,312,'+',34,anchor='middle')+
-    label_box(1070,271,455,60,'V: 4,096 numbers',size=28)+
-    text(585,378,'(4,096 + 4,096) × 2 bytes = 16,384 bytes',29)+
-    line(75,409,1525,409)+
-    text(75,457,'2. Across 32 layers',29,700)+
-    text(75,500,'One K and one V per layer',26)+
-    text(585,457,'16,384 × 32 = 524,288 bytes / token',30)+
-    text(585,503,'≈ 0.524 MB per cached token',29,700,color=BLUE)+
-    line(75,534,1525,534)+
-    text(75,581,'3. Across all requests',29,700)+
-    text(75,628,'16 requests, 4,096 tokens each',26)+
-    text(585,581,'16 × 4,096 = 65,536 cached tokens',29)+
-    text(585,631,'524,288 × 65,536 ≈ 34.4 GB',32,700,color=BLUE)+
-    text(75,706,'If lengths differ, add their cached-token counts: e.g., 1,000 + 2,000 = 3,000.',27)+
+    mathline(75,178,1450,100,'<mtext>KV bytes</mtext><mo>=</mo><mn>2</mn><mo>×</mo><mi>B</mi><mo>×</mo><mi>S</mi><mo>×</mo><mi>L</mi><mo>×</mo><msub><mi>d</mi><mtext>KV</mtext></msub><mo>×</mo><mi>p</mi>',43)+
+    text(75,317,'B: batch size',29)+text(865,317,'L: number of layers',29)+
+    text(75,364,'S: cached sequence length (tokens)',29)+text(865,364,'p: bytes per element',29)+
+    mathline(75,391,1030,53,'<msub><mi>d</mi><mtext>KV</mtext></msub><mo>=</mo><mtext>number of KV heads</mtext><mo>×</mo><mtext>head dimension</mtext>',29)+
+    text(865,429,'2 accounts for K and V.',27)+
+    line(75,469,1525,469)+
+    text(75,519,'Example',31,700,color=BLUE)+
+    text(75,565,'Batch size B = 16; cached sequence length S = 4,096; L = 32 layers;',29)+
+    mathline(75,585,1450,55,'<msub><mi>d</mi><mtext>KV</mtext></msub><mo>=</mo><mn>4,096</mn><mspace width="0.25em"/><mtext>(32 KV heads × 128); BF16,</mtext><mspace width="0.25em"/><mi>p</mi><mo>=</mo><mn>2</mn><mspace width="0.25em"/><mtext>bytes.</mtext>',29)+
+    mathline(75,658,1450,66,'<mtext>KV size</mtext><mo>=</mo><mn>2</mn><mo>×</mo><mn>16</mn><mo>×</mo><mn>4,096</mn><mo>×</mo><mn>32</mn><mo>×</mo><mn>4,096</mn><mo>×</mo><mn>2</mn><mspace width="0.25em"/><mtext>bytes</mtext><mo>≈</mo><mn>34.4</mn><mspace width="0.25em"/><mtext>GB</mtext>',35)+
     takeaway('Weights and temporary buffers need additional memory.',
-              'KV payload only. Same K/V width in all layers; no sharing across requests. GB is decimal.'),
-    'Start with one cached token in one layer. Its K contains 4096 numbers and its V contains another 4096 numbers, across all KV heads. BF16 stores each number in two bytes, so the pair occupies (4096+4096)×2=16384 bytes. Each of the 32 layers has its own K/V pair for that same token, giving 16384×32=524288 bytes per cached token across the model, approximately 0.524 MB. Use the exact byte count in subsequent multiplication. Sixteen requests with 4096 cached tokens each have 65536 cached token positions; their KV payload is 524288×65536=34359738368 bytes, approximately 34.4 GB. One such request needs approximately 2.15 GB. If request lengths differ, simply add them: 1000+2000=3000 cached positions. The general formula is KV bytes = (2×L×D_KV×b)×sum_r S_r. Here 2 counts K and V; L is the number of layers; D_KV is the count of scalar numbers in K alone (and equally in V) for one token in one layer, summed across KV heads; b is bytes per stored scalar, not batch size; and S_r counts cached positions for request r. D_KV equals the number of KV heads times the head dimension, not necessarily the full hidden dimension. This example assumes equal K/V widths across layers and no physical sharing between requests. Cached positions include prompt and generated tokens that have already been processed; the newest sampled token enters the cache when it is fed through the model. This counts stored KV payload, not per-step transfer traffic or total GPU allocation. Model weights, workspace, metadata, and unused cache capacity require additional memory.',('inference','berkeley','kv_size'))
+              'Assume equal sequence lengths and K/V widths, with no prefix sharing. GB is decimal.'),
+    'The formula counts both K and V for a batch of B sequences, each with S cached tokens, across L layers. d_KV is the number of KV heads times the head dimension: the total K dimension for one token in one layer, and equally the total V dimension. It need not equal the full model hidden dimension. p is the storage size in bytes per element. In the example B=16, S=4096, L=32, d_KV=32×128=4096, and p=2 for BF16. Direct substitution gives 2×16×4096×32×4096×2=34359738368 bytes, or approximately 34.4 GB. The first factor 2 counts K and V; the final factor 2 is BF16 storage per element. S counts cached prompt and generated positions already processed, not the maximum permitted sequence length or only the newly generated tokens. The newest sampled token enters the cache when it is subsequently processed. For unequal lengths, replace B×S with the total cached tokens across the batch. The slide assumes uniform layer widths, equal K and V dimensions, and no prefix sharing between requests. This is stored KV payload, not per-step memory traffic or total GPU allocation; unused cache capacity, metadata, model weights and workspace require additional memory.',('inference','berkeley','kv_size'))
 
 def batch_schedule():
     out=''
