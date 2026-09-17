@@ -470,27 +470,28 @@ add('FlashAttention streams tiles through the running state',1.5,
               'Illustration of a query-tile loop. Different query tiles may reread K/V.'),
     'This reconnects the algebra to the GPU memory hierarchy. One query tile and its state are kept on chip, while K/V tiles are streamed from HBM. The score/probability tile is temporary; full S-by-S arrays are never required in HBM. The running state is per query row, and u is a vector. A real kernel partitions storage across registers and shared memory and uses many threads. Do not imply the whole sequence fits on chip, or that all K/V values are read exactly once for the whole attention layer. Loop orders and implementations differ; this is an explanatory query-tile organization consistent with FlashAttention-2-style processing. Causal masks restrict each row’s valid keys.',('flash','paper'))
 
-add('Question 2: Is paged storage enough?',1.5,
-    text(75,193,'A prototype stores K/V in pages, but reconstructs dense tensors every decode step.',29)+
-    codeblock(75,239,1450,226,'# One head. table lists physical pages in logical token order.\n# q: [1, d]; each page: [block_size, d]; T: valid cached positions\nK = torch.cat([K_pool[p] for p in table], dim=0)[:T]\nV = torch.cat([V_pool[p] for p in table], dim=0)[:T]\nout = torch.softmax(q @ K.T / math.sqrt(d), dim=-1) @ V',26)+
-    line(75,490,1525,490)+
-    text(75,545,'1. Can this produce the correct attention output?',31,700)+
-    text(75,606,'2. What extra traffic and storage does reconstructing K/V create?',31,700)+
-    text(75,667,'3. What must change to attend directly to the paged cache?',31,700,color=BLUE)+
+add('Question 2: Copying paged K/V at every decode step',1.5,
+    text(75,193,'K/V are stored in pages. This code joins them into full tensors before each attention call.',28)+
+    text(75,235,'torch.cat allocates new storage and copies the data into it.',28,700,color=BLUE)+
+    codeblock(75,270,1450,226,'# One head. table lists physical pages in logical token order.\n# q: [1, d]; each page: [block_size, d]; T: valid cached positions\nK = torch.cat([K_pool[p] for p in table], dim=0)[:T]\nV = torch.cat([V_pool[p] for p in table], dim=0)[:T]\nout = torch.softmax(q @ K.T / math.sqrt(d), dim=-1) @ V',26)+
+    line(75,524,1525,524)+
+    text(75,576,'1. Does this produce the correct attention output?',31,700)+
+    text(75,634,'2. What extra memory and data movement does the copy require?',31,700)+
+    text(75,692,'3. How could attention use the pages without rebuilding K/V?',31,700,color=BLUE)+
     text(75,803,'Assume a last-position causal query, correct positional encoding, and valid KV contents.',25,color=MUTED),
-    'Authored diagnostic exercise grounded in the PagedAttention kernel design, not a verified interview question from any company. The code is executable for a one-head float tensor setting with the imports and inputs provided. T includes the current processed token. The current query may attend to all T keys, so no future-position mask is needed here. The block table must preserve token order and every view in the list has shape block_size×d. torch.cat allocates a dense tensor and copies page contents; slicing to T occurs after concatenation and does not undo that allocation. Ask participants to separate numerical correctness, persistent allocation, temporary allocations, and bandwidth. The question targets the O(Td) K/V reconstruction. This unfused reference also creates O(T) scores and probabilities; that is a separate cost. No timing or speedup is supplied because they depend on the implementation and workload.',('inference','paged'))
+    'Authored diagnostic exercise grounded in the PagedAttention kernel design, not a verified interview question from any company. The motivation is to connect paged storage to the way an attention kernel reads it. Explain the copying premise before asking the questions: torch.cat allocates new storage and copies the page contents. Reuse slide 15 if helpful: table=[4,1], block_size=4, T=6. P4 holds tokens 1–4 and P1 holds tokens 5–6 plus two unused positions. Concatenation copies all eight positions, then [:T] keeps the first six for attention; slicing does not undo the copy or allocation. The code is executable for a one-head float tensor setting with the imports and inputs provided. T includes the current processed token. The current query may attend to all T keys, so no future-position mask is needed here. The block table must preserve token order and every view in the list has shape block_size×d. Ask participants to separate numerical correctness, persistent allocation, temporary allocations, and bandwidth. The question targets the O(Td) K/V reconstruction. This unfused reference also creates O(T) scores and probabilities; that is a separate cost. No timing or speedup is supplied because they depend on the implementation and workload.',('inference','paged'))
 
-add('Solution 2: The kernel must consume the block table',1.5,
+add('Solution 2: Read K/V directly from the pages',1.5,
     text(75,199,'Correct result',31,700,color=BLUE)+
     lines(430,199,['Yes, if logical order, valid length, and attention semantics match.', 'The physical placement of the pages does not change the formula.'],28,gap=43)+
     line(75,294,1525,294)+
     text(75,349,'Extra cost',31,700,color=BLUE)+
-    lines(430,349,['Each torch.cat reads pages and writes a dense K or V temporary.', 'Attention then reads those dense tensors. Pages and copies coexist.'],28,gap=43)+
+    lines(430,349,['Each torch.cat reads pages and writes a new contiguous K or V tensor.', 'Attention then reads those tensors. The original pages still exist.'],28,gap=43)+
     line(75,444,1525,444)+
     text(75,502,'Direct access',31,700,color=BLUE)+
     lines(430,502,['Pass the block table and valid lengths into a page-aware kernel.', 'Fetch the required K/V tiles and accumulate attention directly.'],28,gap=43)+
     text(75,660,'Measure peak live memory and copy traffic, as well as decode-step latency.',29,700)+
-    takeaway('Paged storage and a compatible attention kernel work together.',
+    takeaway('Use the block table to read K/V without copying the full history.',
               'The kernel still reads the required historical K/V. Paging does not compress the cache.'),
     'The prototype can be mathematically correct. Page allocation already reduces some reservation waste, but every concatenate materializes the requested history again, adding O(Td) temporary storage and extra reads/writes per layer and step. Dense K and V can coexist with the page pool. A page-aware kernel translates token ranges using the block table and consumes page contents directly, retaining online softmax state as necessary. It does not need to recreate a whole contiguous K/V history in HBM. Appending new tokens updates the current tail/new page; old cache contents need not move. The benefit is not a promise of faster single-request attention. Compare the same model, dtype, lengths and batch first, then study admitted concurrency under a fixed memory budget. For numerical checking compare against the dense reference with an appropriate floating-point tolerance.',('inference','paged','vllm'))
 
@@ -575,8 +576,8 @@ ORDER=[
     'Stable streaming needs three running values',
     'A new maximum rescales the old contributions',
     'FlashAttention streams tiles through the running state',
-    'Question 2: Is paged storage enough?',
-    'Solution 2: The kernel must consume the block table',
+    'Question 2: Copying paged K/V at every decode step',
+    'Solution 2: Read K/V directly from the pages',
     'A prefill can delay an ongoing decode batch',
     'Chunked prefill limits work between decode steps',
     'Prefill–decode disaggregation',

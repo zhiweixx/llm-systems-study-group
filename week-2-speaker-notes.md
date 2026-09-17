@@ -183,16 +183,16 @@ This reconnects the algebra to the GPU memory hierarchy. One query tile and its 
 - [CS336 Lecture 5, pp. 52–54](https://raw.githubusercontent.com/stanford-cs336/lectures/main/lecture_05.pdf#page=52)
 - [FlashAttention paper](https://arxiv.org/abs/2205.14135)
 
-## 21. Question 2: Is paged storage enough?
+## 21. Question 2: Copying paged K/V at every decode step
 
 **Suggested time: 1.5 minutes.**
 
-Authored diagnostic exercise grounded in the PagedAttention kernel design, not a verified interview question from any company. The code is executable for a one-head float tensor setting with the imports and inputs provided. T includes the current processed token. The current query may attend to all T keys, so no future-position mask is needed here. The block table must preserve token order and every view in the list has shape block_size×d. torch.cat allocates a dense tensor and copies page contents; slicing to T occurs after concatenation and does not undo that allocation. Ask participants to separate numerical correctness, persistent allocation, temporary allocations, and bandwidth. The question targets the O(Td) K/V reconstruction. This unfused reference also creates O(T) scores and probabilities; that is a separate cost. No timing or speedup is supplied because they depend on the implementation and workload.
+Authored diagnostic exercise grounded in the PagedAttention kernel design, not a verified interview question from any company. The motivation is to connect paged storage to the way an attention kernel reads it. Explain the copying premise before asking the questions: torch.cat allocates new storage and copies the page contents. Reuse slide 15 if helpful: table=[4,1], block_size=4, T=6. P4 holds tokens 1–4 and P1 holds tokens 5–6 plus two unused positions. Concatenation copies all eight positions, then [:T] keeps the first six for attention; slicing does not undo the copy or allocation. The code is executable for a one-head float tensor setting with the imports and inputs provided. T includes the current processed token. The current query may attend to all T keys, so no future-position mask is needed here. The block table must preserve token order and every view in the list has shape block_size×d. Ask participants to separate numerical correctness, persistent allocation, temporary allocations, and bandwidth. The question targets the O(Td) K/V reconstruction. This unfused reference also creates O(T) scores and probabilities; that is a separate cost. No timing or speedup is supplied because they depend on the implementation and workload.
 
 - [CS336 Lecture 10](https://cs336.stanford.edu/lectures/?trace=lecture_10)
 - [PagedAttention paper](https://arxiv.org/abs/2309.06180)
 
-## 22. Solution 2: The kernel must consume the block table
+## 22. Solution 2: Read K/V directly from the pages
 
 **Suggested time: 1.5 minutes.**
 
