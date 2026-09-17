@@ -26,6 +26,7 @@
       s+=`<g opacity="${i<=n?1:.25}">`+rect(75+i*490,376,460,133,i===n?PALE:'white')+text(95+i*490,417,a[0],29,700,BLUE)+text(95+i*490,456,a[1],25)+text(95+i*490,490,a[2],25)+'</g>';
     });
     s+=text(75,555,'KV cache after this pass',27,700)+text(75,601,`${4+n} processed positions`,26,400,MUTED);
+    s+=text(435,534,'Stored K/V for these processed positions',23,400,MUTED);
     for(let i=0;i<6;i++)s+=`<g opacity="${i<4+n?1:.18}">`+box(435+i*115,549,104,65,words[i],i<4?PALE:'#dcece6',22)+'</g>';
     s+=text(1160,569,'The last predicted token',24)+text(1160,607,'has not entered the cache yet.',24);
     const scene=document.querySelector('#generation-scene');
@@ -60,18 +61,17 @@
         b.slots.forEach((token,slot)=>s+=box(147+slot*61,y+12,56,42,token||'—',token?ownerFill:'white',25));
         s+=arrow(416,y+33,451)+box(460,y,285,66,`L${logicalBlock} → P${id}`,ownerFill,29);
       });
-      s+=text(75,566,'— = reserved slot; attention skips it.',25,400,MUTED);
     } else {
       s+=rect(75,315,670,222,'white')+text(100,360,'A’s block table is released.',29,700);
       s+=text(100,410,'P4, P1 and P5 are free again.',28)+text(100,460,'No attention reads remain for A.',26,400,MUTED);
       s+=text(100,510,'C’s table and KV stay in place.',26,400,MUTED);
     }
     p.pool.forEach(b=>{
-      const x=815+(b.id%2)*355,y=299+Math.floor(b.id/2)*94;
+      const x=815+(b.id%2)*355,y=299+Math.floor(b.id/2)*82;
       const active=b.owner!==null&&b.owner===p.owner;
       const fill=active?ownerFill:b.owner?'#f4f5f6':'white';
       s+=`<g data-physical-block="${b.id}" data-owner="${b.owner||'free'}">`;
-      s+=rect(x,y,340,85,fill,active?BLUE:LINE)+text(x+14,y+29,`P${b.id} · ${b.owner||'free'}`,26,700,active?BLUE:MUTED);
+      s+=rect(x,y,340,76,fill,active?BLUE:LINE)+text(x+14,y+29,`P${b.id} · ${b.owner||'free'}`,26,700,active?BLUE:MUTED);
       if(b.owner)s+=text(x+326,y+29,`${b.slots.filter(Boolean).length}/4 valid`,24,400,MUTED,'end');
       b.slots.forEach((token,slot)=>{
         s+=box(x+14+slot*80,y+39,72,35,token||(b.owner?'—':''),'white',24);
@@ -85,8 +85,18 @@
       'Request completion returns A’s blocks to the free pool; C keeps P0 and P2.',
       'B reuses freed P4 for its own KV. C’s blocks remain unchanged.'
     ][p.phase];
-    s+=text(75,600,action,26,700,BLUE);
-    s+=text(76,629,'These blocks store KV data; they are different from CUDA thread blocks.',25,400,MUTED);
+    if(p.owner){
+      const readBlocks=p.mapping.map(id=>{
+        const valid=p.pool[id].slots.filter(Boolean);
+        return `P${id} (${valid.length===1?valid[0]:`${valid[0]}–${valid[valid.length-1]}`})`;
+      }).join(' → ');
+      s+=text(75,566,`Read table [${p.mapping.join(', ')}] → ${readBlocks}.`,25,700,BLUE);
+      s+=text(75,630,`Read only ${p.tokens} valid positions in logical order; “—” slots never participate in attention.`,25,400,MUTED);
+    } else {
+      s+=text(75,566,'No table for A: its former blocks can now hold another request’s KV.',26,700,BLUE);
+      s+=text(75,630,'C still reads its own K/V through table [0, 2].',25,400,MUTED);
+    }
+    s+=text(75,600,action,25);
     const scene=document.querySelector('#paging-scene');
     scene.innerHTML=s;
     scene.closest('.slide').dataset.exampleStep=String(p.phase);
