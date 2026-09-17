@@ -2,7 +2,7 @@
 
 For readers who know Transformer models and PyTorch but have little GPU systems background. The course focuses on GPUs, LLM inference, and model serving, with training memory and sharding as supporting topics.
 
-Each meeting lasts 50 minutes. Week 1 uses a 24-slide, 30-minute presentation, reserving 15 minutes for discussion and 5 minutes of buffer. Week 2 offers 33 slides with about 37 minutes of suggested full content or an approximately 31-minute route. Choose sections for the talk to preserve 15 minutes of discussion and about 4 minutes of buffer. Week 1 and Week 2 slides are published. Weeks 3–4 are planned and reserve at least 15 minutes for discussion.
+Each meeting lasts 50 minutes. Week 1 uses a 24-slide, 30-minute presentation, reserving 15 minutes for discussion and 5 minutes of buffer. Week 2 offers 32 slides with about 35 minutes of suggested full content or an approximately 29-minute route. Choose sections for the talk to preserve 15 minutes of discussion and about 6 minutes of buffer. Week 1 and Week 2 slides are published. Weeks 3–4 are planned and reserve at least 15 minutes for discussion.
 
 ## Week 1: GPU memory and performance
 
@@ -34,12 +34,12 @@ Build on the performance vocabulary introduced in Week 1. Explain why prefill is
 - Separate weight traffic from request-specific KV traffic: batching improves weight reuse, while longer contexts increase the KV data attention must read.
 - Distinguish time to first token, inter-token latency, and aggregate throughput. Calculate the KV capacity needed by a set of active requests and show how continuous batching reuses a finished request's slot.
 - Explain how PagedAttention maps logical KV blocks to physical GPU blocks, allocates blocks as a request grows, and reuses released capacity. Distinguish reduced allocation waste from the historical KV reads still required by attention.
-- Derive online softmax from attention's weighted average: keep the maximum, denominator, and weighted-value sum; rescale when the maximum rises; verify a complete two-key example. Use FlashAttention to connect this recurrence to tiled GPU execution. All arithmetic remains on the slides.
+- Derive online softmax from attention's weighted average: keep the maximum, denominator, and weighted-value sum; rescale when the maximum rises. Use FlashAttention to connect this recurrence to tiled GPU execution. The derivation remains on the slides.
 - Diagnose a numerically correct paged-cache prototype that concatenates its K/V pages. Separate persistent allocation from temporary copies and explain why the attention kernel must consume the block table.
 - Read the published interference experiment in DistServe Figure 2, then compare chunked prefill with separate prefill and decode GPU pools. Explain KV transfer and workload tradeoffs without promising an automatic throughput gain.
 - Interpret CPU/GPU timelines and design a fixed-workload batch-size sweep measuring decode-step latency, aggregate output-token throughput, and peak memory.
 
-**Presentation routes:** the full 33-slide deck has about 37 minutes of suggested content. An approximately 31-minute route skips slides 6, 7, 25, 29, and 30 (31.25 minutes). It retains the complete online-softmax derivation and numerical example on slides 17–20. The presenter chooses the route. The final two slides assign a take-home GEMM exercise and link to its solution; they add no planned lecture time.
+**Presentation routes:** the full 32-slide deck has about 35 minutes of suggested content. An approximately 29-minute route skips slides 6, 7, 24, 28, and 29 (29.25 minutes). It retains the complete online-softmax derivation on slides 17–19. The presenter chooses the route. The final two slides assign a take-home GEMM exercise and link to its solution; they add no planned lecture time.
 
 **Discussion:** a paged KV implementation can produce correct outputs while still copying the entire history. Identify those copies, explain what a page-aware kernel changes, and distinguish fitting more requests from making each request faster.
 

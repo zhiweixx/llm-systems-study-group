@@ -454,7 +454,7 @@ add('Attention is a weighted average',1.25,
     text(75,561,'Denominator',30,700,color=BLUE)+text(405,561,'Sum those same positive weights.',30)+
     text(75,655,'Both sums can accumulate one K/V tile at a time.',33,700)+
     takeaway('Keep the sums. Divide after the final tile.',
-              'An attention output is a vector. A scalar value in a worked example is just one component.'),
+              'Each attention weight scales an entire value vector.'),
     'This is attention after Q/K/V projections, restricted to valid positions for a chosen query. The scale sqrt(d) is already included in each score. Substituting p_j=exp(s_j)/sum_k exp(s_k) into sum_j p_j v_j gives the ratio on screen. The denominator is a scalar; the numerator and output are value-dimension vectors. Both unnormalized sums are additive across disjoint tiles, so a tile does not need to know future scores before contributing. This establishes why streaming is mathematically possible. It does not yet address numerical overflow; the next slide introduces the stable scale. Do not independently normalize tiles and average their outputs, because different tiles have different total weight.',('flash','paper'))
 
 add('Stable streaming needs three running values',1.5,
@@ -481,21 +481,6 @@ add('A new maximum rescales the old contributions',2,
     text(75,701,'If the maximum stays the same, α = 1. After the last tile, output o = u / ℓ.',28)+
     takeaway('Rescale both old sums, then add the new tile on the same scale.'),
     'The identity at the top is the reason this works, not an extra heuristic. For every old score s, exp(s−m′)=exp(s−m) exp(m−m′). Linearity lets us multiply the old denominator and numerator by alpha without retaining old scores or values. The sums in the update range only over the new tile. If the maximum does not increase, alpha is one. Initialization is m=−infinity, l=0, u=0; the first tile with a finite valid maximum gives alpha=0. All-masked tiles require special handling to avoid exp(−infinity−(−infinity)), and are skipped in this introductory derivation. Each state should be updated together, using old l,u in the right-hand sides. The numerator is a vector in real attention.',('normalizer','paper'))
-
-add('Worked example: two keys, one change of scale',2,
-    text(75,192,'Scores s = [1, 2]. Scalar values v = [10, 20]. Process one key per tile.',29)+
-    text(75,244,'When score 2 arrives, α = exp(1 − 2) = e⁻¹ ≈ 0.368.',30,700,color=BLUE)+
-    table(75,288,1450,['State','m','ℓ: total weight','u: weighted sum'],[
-        ['After key 1','1','1','10'],
-        ['Rescale old state','2','e⁻¹','10e⁻¹'],
-        ['Add key 2','2','e⁻¹ + 1','10e⁻¹ + 20'],
-    ],[.32,.10,.25,.33],row_h=79,size=28)+
-    mathline(75,615,710,112,'<mi>o</mi><mo>=</mo><mfrac><mrow><mn>10</mn><msup><mi>e</mi><mrow><mo>−</mo><mn>1</mn></mrow></msup><mo>+</mo><mn>20</mn></mrow><mrow><msup><mi>e</mi><mrow><mo>−</mo><mn>1</mn></mrow></msup><mo>+</mo><mn>1</mn></mrow></mfrac><mo>≈</mo><mn>17.31</mn>',37)+
-    text(885,630,'Full-row check:',27,700)+
-    mathline(873,640,640,94,'<mfrac><mrow><mn>10</mn><msup><mi>e</mi><mn>1</mn></msup><mo>+</mo><mn>20</mn><msup><mi>e</mi><mn>2</mn></msup></mrow><mrow><msup><mi>e</mi><mn>1</mn></msup><mo>+</mo><msup><mi>e</mi><mn>2</mn></msup></mrow></mfrac><mo>≈</mo><mn>17.31</mn>',29)+
-    takeaway('The stored scale changes. The attention result stays the same.',
-              'Averaging the two separately normalized outputs would give 15, which is wrong.'),
-    'This is a complete authored arithmetic example, separate from the symbolic derivation. The first score 1 has relative weight exp(1−1)=1, giving l=1 and u=10. The second score raises m to 2. Rescale all old contributions: l=e^-1 and u=10e^-1. Key 2 has relative weight exp(2−2)=1, so add one to the denominator and 20 to the numerator. The result is 17.3105857863. The full-row expression is algebraically identical after dividing numerator and denominator by e². Each one-key tile normalized independently outputs its own value, 10 and 20, whose unweighted average 15 discards their unequal masses. Larger tiles use sums in exactly the same recurrence; real values are vectors. Every arithmetic step remains on the slide, not only in these notes.',('normalizer','paper'))
 
 add('FlashAttention streams tiles through the running state',1.5,
     text(75,194,'For one query tile, repeat the same update for each valid K/V tile.',30)+
@@ -616,7 +601,6 @@ ORDER=[
     'Attention is a weighted average',
     'Stable streaming needs three running values',
     'A new maximum rescales the old contributions',
-    'Worked example: two keys, one change of scale',
     'FlashAttention streams tiles through the running state',
     'What FlashAttention changes',
     'Question 2: Is paged storage enough?',
@@ -635,20 +619,20 @@ assert set(ORDER)==set(by_title), set(by_title)^set(ORDER)
 slides=[by_title[t] for t in ORDER]
 # Existing timings are planning estimates; the detailed derivation is readable
 # in the deck even when the presenter chooses a shorter route.
-for i,t in {3:1.5,4:1,5:1,6:1.5,7:1.5,8:1,10:1,11:1,12:1,14:1.5,15:1.5,16:1,22:.5,25:1,28:1.5,29:1,30:.5}.items():
+for i,t in {3:1.5,4:1,5:1,6:1.5,7:1.5,8:1,10:1,11:1,12:1,14:1.5,15:1.5,16:1,21:.5,24:1,27:1.5,28:1,29:.5}.items():
     slides[i-1]['minutes']=t
 TOTAL_MINUTES=sum(s['minutes'] for s in slides)
-SHORT_SKIP=[6,7,25,29,30]
+SHORT_SKIP=[6,7,24,28,29]
 SHORT_MINUTES=TOTAL_MINUTES-sum(slides[n-1]['minutes'] for n in SHORT_SKIP)
 slides[0]['body']=text(75,205,'09/17/26',30,color=MUTED)+lines(75,305,['Why does generation slow down,', 'and which part of the system should change?'],43,weight=700)+line(75,410,1525,410)+text(75,475,'Workload and limits',31,700,color=BLUE)+text(635,475,'Prefill, decode, weight reuse, and KV memory',28)+line(75,515,1525,515)+text(75,580,'Attention and storage',31,700,color=BLUE)+text(635,580,'Online softmax, FlashAttention, and paging',28)+line(75,620,1525,620)+text(75,683,'Serving behavior',31,700,color=BLUE)+text(635,683,'Batch membership, interference, and PD',28)+text(75,796,f'{len(slides)} slides: worked derivations, two diagnostic questions, and a GEMM take-home',27,color=MUTED)
-slides[0]['notes']=f'Audience: Transformer/PyTorch familiarity with little GPU systems background. Follow the causal chain from latency metrics and matrix shapes to memory allocation, attention IO, and serving schedules. The complete deck has {TOTAL_MINUTES:g} minutes of suggested content. A roughly {SHORT_MINUTES:g}-minute route skips slides {", ".join(map(str,SHORT_SKIP))}. All derivations and the worked example remain visible in the deck. Reserve 15 minutes for discussion. Slides 32–33 are a take-home GEMM assignment and its reference solution, outside the lecture timing. Questions are authored exercises, not attributed company interview reports. The only empirical figure is clearly attributed to DistServe; other diagrams are schematic and H100 bars are theoretical resource bounds.'
+slides[0]['notes']=f'Audience: Transformer/PyTorch familiarity with little GPU systems background. Follow the causal chain from latency metrics and matrix shapes to memory allocation, attention IO, and serving schedules. The complete deck has {TOTAL_MINUTES:g} minutes of suggested content. A roughly {SHORT_MINUTES:g}-minute route skips slides {", ".join(map(str,SHORT_SKIP))}. The online-softmax derivation remains visible in the deck. Reserve 15 minutes for discussion. Slides 31–32 are a take-home GEMM assignment and its reference solution, outside the lecture timing. Questions are authored exercises, not attributed company interview reports. The only empirical figure is clearly attributed to DistServe; other diagrams are schematic and H100 bars are theoretical resource bounds.'
 by_title['Discussion']['notes']=f'Use the remaining discussion time to ask what observation could falsify a proposed bottleneck. The full route is {TOTAL_MINUTES:g} minutes; a roughly {SHORT_MINUTES:g}-minute route skips {", ".join(map(str,SHORT_SKIP))}. Week 3 develops multi-GPU parallelism and Week 4 studies scheduling, prefix reuse and serving policies in depth. Revisit the paged-prototype diagnostic if participants confuse memory allocation with the attention kernel.'
 
 def build():
-    assert len(slides)==33
+    assert len(slides)==32
     css=(ASSETS/'base.css').read_text()+'''.math-block{height:100%;display:flex;align-items:center;justify-content:flex-start;color:#172329}.math-block math{font-size:inherit}.code-block{margin:0;padding:18px 22px;line-height:1.4;background:#f4f6f8;border-left:3px solid #245675;font-family:ui-monospace,Menlo,Consolas,monospace;white-space:pre}@media print{.math-block,.code-block{break-inside:avoid}}'''+'''\nsvg{font-family:Arial,Helvetica,sans-serif}svg text{font-family:Arial,Helvetica,sans-serif}.interaction{font:25px Arial,Helvetica,sans-serif;display:flex;gap:16px;align-items:center;color:#245675}.interaction button,.interaction select{font:24px Arial,Helvetica,sans-serif;border:1px solid #aec3d1;color:#245675;background:white;padding:10px 17px;cursor:pointer}.interaction button:hover{background:#edf3f7}.interaction button:disabled{color:#88939a;cursor:default}.interaction.vertical{align-items:flex-start;flex-direction:column;gap:12px}.interaction a{font-size:23px}.interaction label{display:flex;gap:18px;align-items:center}button:focus-visible,select:focus-visible{outline:3px solid #397b71;outline-offset:3px}@media print{.interaction button,.interaction select{display:none}.interaction{font-size:23px}}\n'''
     parts=[]
-    notes=['# Week 2 speaker notes', '', f'LLM inference performance. {len(slides)} slides, {TOTAL_MINUTES:g} minutes of suggested full content. A roughly {SHORT_MINUTES:g}-minute route skips slides {", ".join(map(str,SHORT_SKIP))}. Reserve 15 minutes for discussion.', '', 'The HTML deck works offline. All online-softmax derivations and arithmetic remain on the slides. The generation and block-table diagrams have step controls. The DistServe plot is an attributed published experiment; the H100 bars are theoretical bounds, and the remaining diagrams are schematic.', '']
+    notes=['# Week 2 speaker notes', '', f'LLM inference performance. {len(slides)} slides, {TOTAL_MINUTES:g} minutes of suggested full content. A roughly {SHORT_MINUTES:g}-minute route skips slides {", ".join(map(str,SHORT_SKIP))}. Reserve 15 minutes for discussion.', '', 'The HTML deck works offline. The online-softmax derivation remains on the slides. The generation and block-table diagrams have step controls. The DistServe plot is an attributed published experiment; the H100 bars are theoretical bounds, and the remaining diagrams are schematic.', '']
     for i,s in enumerate(slides,1):
         footer=line(75,838,1525,838,'#bdc7cc')
         xx=75
@@ -667,9 +651,9 @@ def build():
         for key in s['sources']:
             label,url=SOURCES[key];notes+=[f'- [{label}]({url})']
         notes+=['']
-    chrome='''<nav class="deck-chrome" aria-label="Presentation controls"><div class="chrome-left"><button id="prev" type="button" aria-label="Previous slide">←</button><span id="counter" aria-live="polite">1 / 33</span><button id="next" type="button" aria-label="Next slide">→</button><span id="slide-title"></span></div><div class="chrome-right"><button id="overview-toggle" type="button">Slides</button><button id="notes-toggle" type="button">Notes</button><button id="fullscreen" type="button">Full screen</button><button id="print" type="button">Print / PDF</button><button id="help-toggle" type="button" aria-label="Keyboard help">?</button></div></nav>
+    chrome='''<nav class="deck-chrome" aria-label="Presentation controls"><div class="chrome-left"><button id="prev" type="button" aria-label="Previous slide">←</button><span id="counter" aria-live="polite">1 / 32</span><button id="next" type="button" aria-label="Next slide">→</button><span id="slide-title"></span></div><div class="chrome-right"><button id="overview-toggle" type="button">Slides</button><button id="notes-toggle" type="button">Notes</button><button id="fullscreen" type="button">Full screen</button><button id="print" type="button">Print / PDF</button><button id="help-toggle" type="button" aria-label="Keyboard help">?</button></div></nav>
 <section id="notes-panel" class="deck-overlay" hidden><div class="panel-header"><h2>Speaker notes</h2><button data-close-overlay="true" type="button">Close</button></div><div id="notes-content"></div></section>
-<section id="overview-panel" class="deck-overlay" hidden><div class="panel-header"><h2>33 slides</h2><button data-close-overlay="true" type="button">Close</button></div><div id="overview-list"></div></section>
+<section id="overview-panel" class="deck-overlay" hidden><div class="panel-header"><h2>32 slides</h2><button data-close-overlay="true" type="button">Close</button></div><div id="overview-list"></div></section>
 <section id="help-panel" class="deck-overlay" hidden><div class="panel-header"><h2>Presentation controls</h2><button data-close-overlay="true" type="button">Close</button></div><p>Arrow keys: change slides. Home / End: first / last slide. Escape: close a panel.</p><p>Use Next step inside a diagram to advance its example. Each solution follows its question. Notes includes assumptions and sources.</p><p>Print / PDF shows completed interactive examples. Online-softmax steps each have their own slide.</p></section>'''
     js=(ASSETS/'navigation.js').read_text()+'\n'+(ASSETS/'interactions.js').read_text()
     html='<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>LLM inference performance · 09/17/26</title><style>'+css+'</style></head><body><main id="viewport" aria-label="Presentation"><div id="stage">'+''.join(parts)+'</div></main>'+chrome+'<script>'+js+'</script></body></html>'

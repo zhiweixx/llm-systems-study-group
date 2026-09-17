@@ -1,14 +1,14 @@
 # Week 2 speaker notes
 
-LLM inference performance. 33 slides, 36.75 minutes of suggested full content. A roughly 31.25-minute route skips slides 6, 7, 25, 29, 30. Reserve 15 minutes for discussion.
+LLM inference performance. 32 slides, 34.75 minutes of suggested full content. A roughly 29.25-minute route skips slides 6, 7, 24, 28, 29. Reserve 15 minutes for discussion.
 
-The HTML deck works offline. All online-softmax derivations and arithmetic remain on the slides. The generation and block-table diagrams have step controls. The DistServe plot is an attributed published experiment; the H100 bars are theoretical bounds, and the remaining diagrams are schematic.
+The HTML deck works offline. The online-softmax derivation remains on the slides. The generation and block-table diagrams have step controls. The DistServe plot is an attributed published experiment; the H100 bars are theoretical bounds, and the remaining diagrams are schematic.
 
 ## 1. LLM inference performance
 
 **Suggested time: 0.5 minutes.**
 
-Audience: Transformer/PyTorch familiarity with little GPU systems background. Follow the causal chain from latency metrics and matrix shapes to memory allocation, attention IO, and serving schedules. The complete deck has 36.75 minutes of suggested content. A roughly 31.25-minute route skips slides 6, 7, 25, 29, 30. All derivations and the worked example remain visible in the deck. Reserve 15 minutes for discussion. Slides 32–33 are a take-home GEMM assignment and its reference solution, outside the lecture timing. Questions are authored exercises, not attributed company interview reports. The only empirical figure is clearly attributed to DistServe; other diagrams are schematic and H100 bars are theoretical resource bounds.
+Audience: Transformer/PyTorch familiarity with little GPU systems background. Follow the causal chain from latency metrics and matrix shapes to memory allocation, attention IO, and serving schedules. The complete deck has 34.75 minutes of suggested content. A roughly 29.25-minute route skips slides 6, 7, 24, 28, 29. The online-softmax derivation remains visible in the deck. Reserve 15 minutes for discussion. Slides 31–32 are a take-home GEMM assignment and its reference solution, outside the lecture timing. Questions are authored exercises, not attributed company interview reports. The only empirical figure is clearly attributed to DistServe; other diagrams are schematic and H100 bars are theoretical resource bounds.
 
 
 ## 2. Latency and throughput measure different things
@@ -174,16 +174,7 @@ The identity at the top is the reason this works, not an extra heuristic. For ev
 - [Online normalizer, 2018](https://arxiv.org/abs/1805.02867)
 - [FlashAttention paper](https://arxiv.org/abs/2205.14135)
 
-## 20. Worked example: two keys, one change of scale
-
-**Suggested time: 2 minutes.**
-
-This is a complete authored arithmetic example, separate from the symbolic derivation. The first score 1 has relative weight exp(1−1)=1, giving l=1 and u=10. The second score raises m to 2. Rescale all old contributions: l=e^-1 and u=10e^-1. Key 2 has relative weight exp(2−2)=1, so add one to the denominator and 20 to the numerator. The result is 17.3105857863. The full-row expression is algebraically identical after dividing numerator and denominator by e². Each one-key tile normalized independently outputs its own value, 10 and 20, whose unweighted average 15 discards their unequal masses. Larger tiles use sums in exactly the same recurrence; real values are vectors. Every arithmetic step remains on the slide, not only in these notes.
-
-- [Online normalizer, 2018](https://arxiv.org/abs/1805.02867)
-- [FlashAttention paper](https://arxiv.org/abs/2205.14135)
-
-## 21. FlashAttention streams tiles through the running state
+## 20. FlashAttention streams tiles through the running state
 
 **Suggested time: 1.5 minutes.**
 
@@ -192,7 +183,7 @@ This reconnects the algebra to the GPU memory hierarchy. One query tile and its 
 - [CS336 Lecture 5, pp. 52–54](https://raw.githubusercontent.com/stanford-cs336/lectures/main/lecture_05.pdf#page=52)
 - [FlashAttention paper](https://arxiv.org/abs/2205.14135)
 
-## 22. What FlashAttention changes
+## 21. What FlashAttention changes
 
 **Suggested time: 0.5 minutes.**
 
@@ -201,7 +192,7 @@ FlashAttention is an IO-aware algorithm for exact dense attention, not sparse at
 - [CS336 Lecture 5, pp. 52–54](https://raw.githubusercontent.com/stanford-cs336/lectures/main/lecture_05.pdf#page=52)
 - [FlashAttention paper](https://arxiv.org/abs/2205.14135)
 
-## 23. Question 2: Is paged storage enough?
+## 22. Question 2: Is paged storage enough?
 
 **Suggested time: 1.5 minutes.**
 
@@ -210,7 +201,7 @@ Authored diagnostic exercise grounded in the PagedAttention kernel design, not a
 - [CS336 Lecture 10](https://cs336.stanford.edu/lectures/?trace=lecture_10)
 - [PagedAttention paper](https://arxiv.org/abs/2309.06180)
 
-## 24. Solution 2: The kernel must consume the block table
+## 23. Solution 2: The kernel must consume the block table
 
 **Suggested time: 1.5 minutes.**
 
@@ -220,7 +211,7 @@ The prototype can be mathematically correct. Page allocation already reduces som
 - [PagedAttention paper](https://arxiv.org/abs/2309.06180)
 - [vLLM: PagedAttention](https://vllm-project.github.io/2023/06/20/vllm.html)
 
-## 25. CUDA Graphs reduce repeated launch overhead
+## 24. CUDA Graphs reduce repeated launch overhead
 
 **Suggested time: 1 minutes.**
 
@@ -229,7 +220,7 @@ These timelines are schematic, not profiler measurements and not to scale. A CUD
 - [PyTorch CUDA Graphs](https://docs.pytorch.org/docs/stable/notes/cuda.html#cuda-graphs)
 - [CS336 Lecture 6](https://github.com/stanford-cs336/lectures/blob/main/lecture_06.py)
 
-## 26. A prefill can delay an ongoing decode batch
+## 25. A prefill can delay an ongoing decode batch
 
 **Suggested time: 1.5 minutes.**
 
@@ -238,7 +229,7 @@ Figure reproduced from DistServe Figure 2, physical PDF p5, proceedings p196, wi
 - [DistServe, Fig. 2 (OSDI 2024)](https://www.usenix.org/system/files/osdi24-zhong-yinmin.pdf#page=5)
 - [Berkeley L18, PDF pp. 39–41](https://scalable-ai.eecs.berkeley.edu/S2026/assets/lecture_slides/lecture_18.pdf#page=39)
 
-## 27. Chunked prefill limits work between decode steps
+## 26. Chunked prefill limits work between decode steps
 
 **Suggested time: 1 minutes.**
 
@@ -247,7 +238,7 @@ The timeline illustrates bounded prompt work between decode opportunities. It is
 - [Berkeley L18, PDF p. 18](https://scalable-ai.eecs.berkeley.edu/S2026/assets/lecture_slides/lecture_18.pdf#page=18)
 - [DistServe (OSDI 2024)](https://www.usenix.org/conference/osdi24/presentation/zhong-yinmin)
 
-## 28. Prefill–decode disaggregation
+## 27. Prefill–decode disaggregation
 
 **Suggested time: 1.5 minutes.**
 
@@ -256,7 +247,7 @@ PD means prefill–decode disaggregation. Prefill and decode instances use disti
 - [DistServe (OSDI 2024)](https://www.usenix.org/conference/osdi24/presentation/zhong-yinmin)
 - [Berkeley L18, PDF pp. 39–41](https://scalable-ai.eecs.berkeley.edu/S2026/assets/lecture_slides/lecture_18.pdf#page=39)
 
-## 29. Experiment: sweep batch size on one GPU
+## 28. Experiment: sweep batch size on one GPU
 
 **Suggested time: 1 minutes.**
 
@@ -266,7 +257,7 @@ The lab is a small causal Transformer with random weights. It studies execution 
 - [PyTorch CUDA timing](https://docs.pytorch.org/docs/stable/notes/cuda.html#asynchronous-execution)
 - [Berkeley L18, PDF pp. 47–53](https://scalable-ai.eecs.berkeley.edu/S2026/assets/lecture_slides/lecture_18.pdf#page=47)
 
-## 30. A measurement should test a bottleneck hypothesis
+## 29. A measurement should test a bottleneck hypothesis
 
 **Suggested time: 0.5 minutes.**
 
@@ -275,17 +266,17 @@ Each row is a hypothesis, not a diagnosis from one symptom. A profiler timeline 
 - [CS336 Lecture 6](https://github.com/stanford-cs336/lectures/blob/main/lecture_06.py)
 - [Berkeley L18, PDF pp. 47–53](https://scalable-ai.eecs.berkeley.edu/S2026/assets/lecture_slides/lecture_18.pdf#page=47)
 
-## 31. Discussion
+## 30. Discussion
 
 **Suggested time: 0.5 minutes.**
 
-Use the remaining discussion time to ask what observation could falsify a proposed bottleneck. The full route is 36.75 minutes; a roughly 31.25-minute route skips 6, 7, 25, 29, 30. Week 3 develops multi-GPU parallelism and Week 4 studies scheduling, prefix reuse and serving policies in depth. Revisit the paged-prototype diagnostic if participants confuse memory allocation with the attention kernel.
+Use the remaining discussion time to ask what observation could falsify a proposed bottleneck. The full route is 34.75 minutes; a roughly 29.25-minute route skips 6, 7, 24, 28, 29. Week 3 develops multi-GPU parallelism and Week 4 studies scheduling, prefix reuse and serving policies in depth. Revisit the paged-prototype diagnostic if participants confuse memory allocation with the attention kernel.
 
 - [CS336 Lecture 10](https://cs336.stanford.edu/lectures/?trace=lecture_10)
 - [CS336 Lecture 5, pp. 52–54](https://raw.githubusercontent.com/stanford-cs336/lectures/main/lecture_05.pdf#page=52)
 - [Berkeley L18, PDF pp. 9–16](https://scalable-ai.eecs.berkeley.edu/S2026/assets/lecture_slides/lecture_18.pdf#page=9)
 
-## 32. Question 3: Take-home — implement GEMM in Triton
+## 31. Question 3: Take-home — implement GEMM in Triton
 
 **Suggested time: 0 minutes.**
 
@@ -293,7 +284,7 @@ This is a take-home assignment adapted from the official Triton Matrix Multiplic
 
 - [Triton: Matrix Multiplication](https://triton-lang.org/main/getting-started/tutorials/03-matrix-multiplication.html)
 
-## 33. Solution 3: Triton GEMM tutorial
+## 32. Solution 3: Triton GEMM tutorial
 
 **Suggested time: 0 minutes.**
 

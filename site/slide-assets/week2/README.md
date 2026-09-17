@@ -16,7 +16,7 @@ The figure is embedded in the standalone HTML. Source links appear on its slide 
 
 ## Authored diagrams and calculations
 
-Other diagrams are authored teaching schematics. The generation and paged-KV examples have step controls; scheduling diagrams show ordering rather than measured durations. The H100 bars show ideal resource-time bounds under stated assumptions. The two-key online-softmax example is an arithmetic illustration, not benchmark data.
+Other diagrams are authored teaching schematics. The generation and paged-KV examples have step controls; scheduling diagrams show ordering rather than measured durations. The H100 bars show ideal resource-time bounds under stated assumptions.
 
 The earlier synthetic throughput plot, based on an assumed step-time formula, has been removed. The optional lab generates plots from the presenter's measured CSV data.
 
