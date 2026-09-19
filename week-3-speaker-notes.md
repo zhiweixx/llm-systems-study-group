@@ -2,7 +2,7 @@
 
 Scaling LLMs across GPUs. Expanded coverage of data, tensor, pipeline, context, and expert parallelism, with ZeRO/FSDP state sharding. No fixed presentation duration.
 
-45 slides. Use the Slides menu to navigate by section. The standalone HTML includes all diagrams and works offline. External reference links require internet access.
+50 slides. Use the Slides menu to navigate by section. The standalone HTML includes all diagrams and works offline. External reference links require internet access.
 
 All numerical examples and diagrams are teaching examples unless explicitly stated otherwise. Questions are authored exercises, not attributed company interview reports.
 
@@ -128,7 +128,25 @@ Read each row as one GPU and each column as one equal-duration stage interval. A
 - [CS336 Lecture 8](https://raw.githubusercontent.com/stanford-cs336/lectures/main/lecture_08.pdf)
 - [Ultra-Scale Playbook](https://nanotron-ultrascale-playbook.static.hf.space/index.html)
 
-## 15. One decode request still has a token dependency
+## 15. Deeper pipelines need more microbatches
+
+**Section: Pipeline parallelism**
+
+The lesson concerns idle fraction, not an unconditional increase in absolute iteration time. Let p be the number of pipeline stages and m the number of microbatches per training iteration for one data-parallel replica. Under a balanced non-interleaved GPipe-style schedule, with equal stage forward times and equal stage backward times across stages and with communication omitted, the fill/drain overhead is (p−1) stage forward-plus-backward intervals, compared with m useful intervals. The bubble fraction of total GPU-time is therefore (p−1)/(m+p−1). Do not confuse it with overhead divided by useful compute, (p−1)/m; these have different denominators. The examples are 3/19=15.8%, 7/23=30.4%, and 7/71=9.9%. Blue and gray bars are normalized ideal compute/idle shares, not measurements. Increasing PP also partitions the model into smaller stages and can reduce stage time, so the chart does not predict that the full step must take longer. Interleaved schedules and other pipeline schedules can alter the bubble model; uneven layers, communication, and launch overhead add real costs. The fixed-m comparison holds microbatch count constant; the next slide shows how that count is chosen.
+
+- [Megatron: pipeline model](https://arxiv.org/html/2104.04473v5#S2.SS2)
+
+## 16. Microbatch count is not microbatch size
+
+**Section: Pipeline parallelism**
+
+A microbatch contains a number of sequences. The microbatch count is how many such chunks pass through one pipeline replica during the gradient-accumulation window before an optimizer update. For equal-size batches, global batch size = DP degree × microbatch size × number of microbatches. PP does not multiply the global batch because each stage processes the same examples at a different group of layers. With global batch 256 and DP4, each pipeline replica processes 64 sequences: microbatch size 4 gives m=16, while size 1 gives m=64. At PP8 the ideal bubble fractions are 7/23 and 7/71. These are sequence counts, not token counts; equal sequence lengths are assumed for the toy timing comparison. This arithmetic does not assert that the size-1 configuration runs faster. Reducing microbatch size may reduce GEMM efficiency and increase per-operation overhead, while increasing it may improve kernels but retain more activations. The batch/PP choice therefore requires measurement. Microbatches do not allocate additional stages; PP degree is a separate model/deployment configuration. Megatron is one implementation, but PyTorch distributed.pipelining and DeepSpeed also explicitly support pipeline training with microbatches. This training formula is not permission to schedule the unknown future tokens of one autoregressive request as independent microbatches. The following decode-dependency slide explains that distinction.
+
+- [Megatron: microbatch trade-off](https://arxiv.org/html/2104.04473v5#S3.SS4)
+- [PyTorch pipelining](https://docs.pytorch.org/docs/2.14/distributed.pipelining.html)
+- [DeepSpeed pipeline](https://www.deepspeed.ai/tutorials/pipeline/)
+
+## 17. One decode request still has a token dependency
 
 **Section: Pipeline parallelism**
 
@@ -137,7 +155,7 @@ This diagram makes the autoregressive dependency explicit. A forward pass on the
 - [Scaling Book: inference](https://jax-ml.github.io/scaling-book/inference/)
 - [vLLM parallelism](https://docs.vllm.ai/en/stable/serving/parallelism_scaling/)
 
-## 16. Data-parallel training must keep the model copies consistent
+## 18. Data-parallel training must keep the model copies consistent
 
 **Section: Data parallelism**
 
@@ -145,7 +163,7 @@ DDP means DistributedDataParallel. Each worker processes different examples with
 
 - [PyTorch: DDP design](https://docs.pytorch.org/docs/stable/notes/ddp.html)
 
-## 17. The optimizer update explains why DDP averages gradients
+## 19. The optimizer update explains why DDP averages gradients
 
 **Section: Data parallelism**
 
@@ -154,7 +172,7 @@ All numbers are an authored arithmetic example. The model is deliberately a two-
 - [PyTorch: DDP design](https://docs.pytorch.org/docs/stable/notes/ddp.html)
 - [NCCL: collective operations](https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/usage/collectives.html)
 
-## 18. ZeRO progressively shards the state that DDP replicates
+## 20. ZeRO progressively shards the state that DDP replicates
 
 **Section: Training-state sharding**
 
@@ -162,7 +180,7 @@ ZeRO stages progressively partition optimizer state, gradients, and parameters a
 
 - [ZeRO paper, §3](https://arxiv.org/abs/1910.02054)
 
-## 19. Sharding the same 8B model: 128 → 56 → 44 → 32 GB per GPU
+## 21. Sharding the same 8B model: 128 → 56 → 44 → 32 GB per GPU
 
 **Section: Training-state sharding**
 
@@ -170,7 +188,7 @@ The numbers are derived from the same illustrative state layout used in Week 1. 
 
 - [Ultra-Scale: ZeRO memory](https://nanotron-ultrascale-playbook.static.hf.space/index.html#zero-redundancy-optimizer-zero)
 
-## 20. Gather weights for computation; scatter gradients for the update
+## 22. Gather weights for computation; scatter gradients for the update
 
 **Section: Training-state sharding**
 
@@ -179,7 +197,7 @@ AllGather copies disjoint parameter slices into a full tensor on every participa
 - [NCCL: collective operations](https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/usage/collectives.html)
 - [PyTorch: FSDP2 execution](https://docs.pytorch.org/tutorials/intermediate/FSDP_tutorial.html#how-fsdp2-works)
 
-## 21. FSDP saves memory by gathering weights when needed
+## 23. FSDP saves memory by gathering weights when needed
 
 **Section: Training-state sharding**
 
@@ -188,7 +206,7 @@ This is a logical dependency trace for one layer, not a proportional timing char
 - [PyTorch: FSDP2 execution](https://docs.pytorch.org/tutorials/intermediate/FSDP_tutorial.html#how-fsdp2-works)
 - [Ultra-Scale: ZeRO memory](https://nanotron-ultrascale-playbook.static.hf.space/index.html#zero-redundancy-optimizer-zero)
 
-## 22. Context parallelism splits one long sequence
+## 24. Context parallelism splits one long sequence
 
 **Section: Context parallelism**
 
@@ -199,7 +217,7 @@ Background reading: https://insujang.github.io/2024-09-20/introducing-context-pa
 - [Megatron CP](https://docs.nvidia.com/megatron-core/developer-guide/latest/user-guide/features/context_parallel.html)
 - [Insu Jang: CP overview](https://insujang.github.io/2024-09-20/introducing-context-parallelism/)
 
-## 23. Attention must still cross the token shards
+## 25. Attention must still cross the token shards
 
 **Section: Context parallelism**
 
@@ -210,7 +228,7 @@ https://docs.nvidia.com/megatron-core/developer-guide/latest/user-guide/features
 - [Ring Attention](https://arxiv.org/abs/2310.01889)
 - [Megatron CP](https://docs.nvidia.com/megatron-core/developer-guide/latest/user-guide/features/context_parallel.html)
 
-## 24. Ring attention keeps Q local and circulates KV
+## 26. Ring attention keeps Q local and circulates KV
 
 **Section: Context parallelism**
 
@@ -219,7 +237,7 @@ Source: https://arxiv.org/abs/2310.01889
 
 - [Ring Attention, §3](https://arxiv.org/abs/2310.01889)
 
-## 25. Merge summaries, not local softmax outputs
+## 27. Merge summaries, not local softmax outputs
 
 **Section: Context parallelism**
 
@@ -230,7 +248,7 @@ https://arxiv.org/abs/2310.01889
 - [FlashAttention](https://arxiv.org/abs/2205.14135)
 - [Ring Attention](https://arxiv.org/abs/2310.01889)
 
-## 26. Balance causal work across the GPUs
+## 28. Balance causal work across the GPUs
 
 **Section: Context parallelism**
 
@@ -241,7 +259,7 @@ https://docs.nvidia.com/megatron-core/developer-guide/nightly/apidocs/core/core.
 - [Striped Attention](https://arxiv.org/abs/2311.09431)
 - [Megatron zigzag layout](https://docs.nvidia.com/megatron-core/developer-guide/nightly/apidocs/core/core.context_parallel.layout.html)
 
-## 27. Ulysses trades token shards for head shards
+## 29. Ulysses trades token shards for head shards
 
 **Section: Context parallelism**
 
@@ -252,7 +270,7 @@ Additional walkthrough: https://insujang.github.io/2024-09-20/introducing-contex
 - [DeepSpeed Ulysses](https://github.com/deepspeedai/DeepSpeed/blob/master/blogs/deepspeed-ulysses/README.md)
 - [Insu Jang: Ulysses](https://insujang.github.io/2024-09-20/introducing-context-parallelism/)
 
-## 28. Context parallelism and Megatron SP differ
+## 30. Context parallelism and Megatron SP differ
 
 **Section: Context parallelism**
 
@@ -263,7 +281,7 @@ https://github.com/deepspeedai/DeepSpeed/blob/master/blogs/deepspeed-ulysses/REA
 - [Megatron CP vs SP](https://docs.nvidia.com/megatron-core/developer-guide/latest/user-guide/features/context_parallel.html)
 - [DeepSpeed Ulysses](https://github.com/deepspeedai/DeepSpeed/blob/master/blogs/deepspeed-ulysses/README.md)
 
-## 29. Decode parallelism shards the cached history
+## 31. Decode parallelism shards the cached history
 
 **Section: Context parallelism**
 
@@ -274,7 +292,7 @@ https://vllm.ai/blog/2026-08-07-decode-context-parallelism
 - [vLLM context parallelism](https://docs.vllm.ai/en/latest/serving/context_parallel_deployment/)
 - [vLLM DCP design](https://vllm.ai/blog/2026-08-07-decode-context-parallelism)
 
-## 30. What context parallelism saves
+## 32. What context parallelism saves
 
 **Section: Context parallelism**
 
@@ -286,7 +304,16 @@ https://docs.nvidia.com/megatron-core/developer-guide/latest/user-guide/features
 - [Ring Attention](https://arxiv.org/abs/2310.01889)
 - [FlashAttention](https://arxiv.org/abs/2205.14135)
 
-## 31. MoE: choose a few expert MLPs for each token
+## 33. TP and CP degrees must match the tensor layout
+
+**Section: Context parallelism**
+
+Typical GPU groups and common Transformer dimensions make 1, 2, 4, 8, and 16 convenient starting points. These are powers of two, not the set of all even numbers. This is a practical starting heuristic rather than a mathematical requirement. In Megatron, the number of query heads must be divisible by TP for its equal partition. Thus 32 heads can split over TP4 but not TP6 in this design. This does not certify a complete configuration: feedforward dimensions, KV head handling, kernel alignment, communication backend, and available ranks also matter. A model with 12 query heads can pass this head-partition test at TP3, provided the remaining requirements are met. As a concrete implementation counterexample to the power-of-two claim, vLLM custom_all_reduce.py lists supported world sizes including 6; this is only collective support, not support for arbitrary models at TP6. Source: https://github.com/vllm-project/vllm/blob/main/vllm/distributed/device_communicators/custom_all_reduce.py . For CP, Megatron’s ordinary balanced causal sequence partition checks sequence_length modulo 2*CP. CP3 therefore creates six chunks; 6144/6=1024. The factor two comes from assigning two chunks per rank to balance causal attention, as shown earlier. It does not require CP itself to be even. This example checks partition arithmetic only; backend and layout-conversion paths may impose additional restrictions. Classic Ulysses partitions heads as well as redistributing tokens, so head divisibility is another requirement, whereas ring CP does not distribute work by sharding heads. See https://www.deepspeed.ai/tutorials/ds-sequence/ for Ulysses. Always validate the specific framework version and model.
+
+- [Megatron: TP constraints](https://github.com/NVIDIA/Megatron-LM/blob/main/megatron/core/transformer/transformer_config.py)
+- [Megatron: sequence constraints](https://github.com/NVIDIA/Megatron-LM/blob/main/megatron/training/arguments.py)
+
+## 34. MoE: choose a few expert MLPs for each token
 
 **Section: Expert parallelism**
 
@@ -294,7 +321,7 @@ An expert is a learned feed-forward network with its own weight matrices. The ro
 
 - [Mixtral §2](https://arxiv.org/abs/2401.04088)
 
-## 32. Expert parallelism places different experts on different GPUs
+## 35. Expert parallelism places different experts on different GPUs
 
 **Section: Expert parallelism**
 
@@ -303,7 +330,7 @@ Expert ownership is the new partition axis. In pure two-way EP, GPU 0 owns E0 an
 - [vLLM: expert parallelism](https://docs.vllm.ai/en/latest/serving/expert_parallel_deployment/)
 - [DeepSpeed MoE](https://www.deepspeed.ai/tutorials/mixture-of-experts/)
 
-## 33. Follow four tokens through a two-GPU MoE layer
+## 36. Follow four tokens through a two-GPU MoE layer
 
 **Section: Expert parallelism**
 
@@ -311,7 +338,7 @@ Use exactly this routing table on the next slide. A and B start on GPU 0, C and 
 
 - [Megatron: token dispatch](https://docs.nvidia.com/megatron-core/developer-guide/0.19.0/apidocs/core/core.transformer.moe.token_dispatcher.html)
 
-## 34. Dispatch → expert computation → return and combine
+## 37. Dispatch → expert computation → return and combine
 
 **Section: Expert parallelism**
 
@@ -319,7 +346,7 @@ Interactive sequence using the previous routing table. Step 1: GPU 0 sends A and
 
 - [Megatron: token dispatch](https://docs.nvidia.com/megatron-core/developer-guide/0.19.0/apidocs/core/core.transformer.moe.token_dispatcher.html)
 
-## 35. Routing imbalance can leave some GPUs waiting
+## 38. Routing imbalance can leave some GPUs waiting
 
 **Section: Expert parallelism**
 
@@ -327,7 +354,7 @@ Expert count is a capacity allocation, while routed token count is a workload al
 
 - [vLLM: expert parallelism](https://docs.vllm.ai/en/latest/serving/expert_parallel_deployment/)
 
-## 36. Different layers can use different parallelism strategies
+## 39. Different layers can use different parallelism strategies
 
 **Section: Expert parallelism**
 
@@ -336,7 +363,7 @@ This connects EP to the earlier distinction between request replicas and coopera
 - [vLLM: expert parallelism](https://docs.vllm.ai/en/latest/serving/expert_parallel_deployment/)
 - [vLLM: data parallelism](https://docs.vllm.ai/en/stable/serving/data_parallel_deployment/)
 
-## 37. Parallelism choices change different tensor dimensions
+## 40. Parallelism choices change different tensor dimensions
 
 **Section: Putting it together**
 
@@ -345,7 +372,7 @@ This is a recap after the worked examples, not a replacement for them. Serving r
 - [Ultra-Scale Playbook](https://nanotron-ultrascale-playbook.static.hf.space/index.html)
 - [CS336 Lecture 8](https://raw.githubusercontent.com/stanford-cs336/lectures/main/lecture_08.pdf)
 
-## 38. A deployment combines several communication groups
+## 41. A deployment combines several communication groups
 
 **Section: Putting it together**
 
@@ -354,7 +381,25 @@ Two replicas process independent request batches. Each replica has two pipeline 
 - [vLLM parallelism](https://docs.vllm.ai/en/stable/serving/parallelism_scaling/)
 - [Ultra-Scale Playbook](https://nanotron-ultrascale-playbook.static.hf.space/index.html)
 
-## 39. Four GPUs offer several serving layouts
+## 42. Placement follows communication, not the acronym
+
+**Section: Choosing a layout**
+
+The heuristic TP inside a node and PP/DP across nodes assumes a server with fast GPU-to-GPU links and a slower inter-server network. TP commonly places collectives on a layer’s critical path, so latency and bandwidth matter strongly. PP typically communicates activation tensors at stage boundaries, and corresponding activation gradients during training, rather than at every internal TP partition. Replicated training DP synchronizes gradient buckets; some transfers can overlap backward compute, and accumulation may avoid synchronization on intermediate microbatches. It is not communication-free or guaranteed to scale on a slow network. DP inference replicas normally serve independent requests and do not synchronize gradients, so the table’s DP communication refers to training. FSDP/ZeRO-3 is different from ordinary replicated DP: it repeatedly gathers parameters and reduces/scatters gradients, potentially making a cross-node sharding group expensive. PyTorch HYBRID_SHARD keeps full sharding within a node and replicates groups across nodes, reducing inter-node parameter traffic while retaining cross-node gradient synchronization. vLLM documents TP within nodes plus PP across nodes as one deployment layout and also supports TP across nodes. Fast network domains need not coincide with physical server boundaries. The correct choice follows actual connectivity, communication volume and frequency, overlap, workload, and memory capacity.
+
+- [vLLM: parallel layouts](https://docs.vllm.ai/en/stable/serving/parallelism_scaling/)
+- [PyTorch: hybrid sharding](https://docs.pytorch.org/docs/main/fsdp.html)
+
+## 43. CP and EP can use communication across nodes
+
+**Section: Choosing a layout**
+
+This is a topology schematic of hierarchical context parallelism, not a complete tensor-layout trace. The four-rank CP group is factored into a local group size two and an outer group size two. Inside a node, an All-to-All redistributes token/head ownership, as in the Ulysses idea introduced earlier. Across the outer groups, point-to-point communication circulates KV data, as in ring attention. The diagram labels head ownership after the local All-to-All. Ranks 0 and 2 share one head partition and form one outer P2P group; ranks 1 and 3 share the other and form the second group. Each exchanges the corresponding KV while retaining its local queries. The KV-head count remaining after any TP must be divisible by the local All-to-All factor of two; the example uses TP1. Megatron Bridge documents this a2a+p2p strategy and hierarchical_context_parallel_sizes; its documentation includes a larger [8,2] arrangement. The two-node/two-GPU illustration here uses the same idea at smaller scale, with no measured performance claim. A CP group spanning nodes may use other algorithms; this diagram is not mandatory for all CP. For EP, expert weights remain on their owning ranks while token activations and expert outputs cross the network. vLLM explicitly documents multi-node EP deployment, including 16 GPUs across two nodes. The performance depends on routing volume, imbalance, message sizes, dispatch/combine implementation, network connectivity, and workload. Keeping frequent traffic local is a useful goal, but it does not establish that every non-DP/non-PP method must stay within one server. Modern fast interconnect domains can also span physical server boundaries.
+
+- [Megatron: hierarchical CP](https://docs.nvidia.com/nemo/megatron-bridge/0.4.0/training/hybrid-context-parallel.html)
+- [vLLM: multi-node EP](https://docs.vllm.ai/en/latest/serving/expert_parallel_deployment/)
+
+## 44. Four GPUs offer several serving layouts
 
 **Section: Putting it together**
 
@@ -363,7 +408,7 @@ The same hypothetical 8B dense model has 16 GB of BF16 weights. Four independent
 - [vLLM parallelism](https://docs.vllm.ai/en/stable/serving/parallelism_scaling/)
 - [Scaling Book: inference](https://jax-ml.github.io/scaling-book/inference/)
 
-## 40. Question 1: Complete a tensor-parallel MLP
+## 45. Question 1: Complete a tensor-parallel MLP
 
 **Section: Questions**
 
@@ -371,7 +416,7 @@ Authored interview-style exercise grounded in the Megatron-LM tensor partition, 
 
 - [Megatron-LM, §3](https://arxiv.org/abs/1909.08053)
 
-## 41. Solution 1: Local products, then a sum AllReduce
+## 46. Solution 1: Local products, then a sum AllReduce
 
 **Section: Questions**
 
@@ -380,7 +425,7 @@ The input is replicated and each local H contains different output features, so 
 - [Megatron-LM, §3](https://arxiv.org/abs/1909.08053)
 - [PyTorch tensor parallelism](https://docs.pytorch.org/tutorials/intermediate/TP_tutorial.html)
 
-## 42. Question 2: Why does TP = 4 barely improve decode?
+## 47. Question 2: Why does TP = 4 barely improve decode?
 
 **Section: Questions**
 
@@ -389,7 +434,7 @@ This is an authored diagnostic question using explicitly hypothetical times, not
 - [Scaling Book: inference](https://jax-ml.github.io/scaling-book/inference/)
 - [vLLM parallelism](https://docs.vllm.ai/en/stable/serving/parallelism_scaling/)
 
-## 43. Solution 2: Separate local speedup from serving capacity
+## 48. Solution 2: Separate local speedup from serving capacity
 
 **Section: Questions**
 
@@ -398,7 +443,7 @@ The given arithmetic identifies exposed communication as consuming most of the l
 - [Scaling Book: inference](https://jax-ml.github.io/scaling-book/inference/)
 - [vLLM parallelism](https://docs.vllm.ai/en/stable/serving/parallelism_scaling/)
 
-## 44. Take-home: Simulate two tensor-parallel ranks
+## 49. Take-home: Simulate two tensor-parallel ranks
 
 **Section: Take-home**
 
@@ -406,7 +451,7 @@ The exercise extends Question1 into executable code. First use one process and t
 
 - [PyTorch tensor parallelism](https://docs.pytorch.org/tutorials/intermediate/TP_tutorial.html)
 
-## 45. Take-home solution: PyTorch reference
+## 50. Take-home solution: PyTorch reference
 
 **Section: Take-home**
 

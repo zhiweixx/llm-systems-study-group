@@ -2,7 +2,7 @@
 
 For readers who know Transformer models and PyTorch but have little GPU systems background. The course focuses on GPUs, LLM inference, and model serving, with training memory and sharding as supporting topics.
 
-The original meeting format is 50 minutes. Week 1 uses a 24-slide, 30-minute presentation, reserving 15 minutes for discussion and 5 minutes of buffer. Week 2 offers 31 slides with about 35 minutes of suggested full content or an approximately 32-minute route. The shorter route preserves 15 minutes of discussion and roughly 3 minutes of buffer. These are planning estimates rather than rehearsed durations. Week 3 is an expanded 45-slide teaching and reference deck with no fixed presentation duration; its sections can be presented separately. Week 4 remains planned.
+The original meeting format is 50 minutes. Week 1 uses a 24-slide, 30-minute presentation, reserving 15 minutes for discussion and 5 minutes of buffer. Week 2 offers 31 slides with about 35 minutes of suggested full content or an approximately 32-minute route. The shorter route preserves 15 minutes of discussion and roughly 3 minutes of buffer. These are planning estimates rather than rehearsed durations. Week 3 is an expanded 50-slide teaching and reference deck with no fixed presentation duration; its sections can be presented separately. Week 4 remains planned.
 
 ## Week 1: GPU memory and performance
 
@@ -49,19 +49,19 @@ Build on the performance vocabulary introduced in Week 1. Explain why prefill is
 
 ## Week 3: Multi-GPU parallelism and sharding
 
-Understand how extra GPUs change memory capacity, computation, and communication. The 45-slide deck covers all five parallelism dimensions through worked tensor examples, with no fixed presentation duration.
+Understand how extra GPUs change memory capacity, computation, and communication. The 50-slide deck covers all five parallelism dimensions through worked tensor examples, with no fixed presentation duration.
 
 - Establish separate capacity, latency, and throughput objectives. Define nodes, ranks, and communication groups, and show that each GPU has its own memory.
 - Route different inference requests to serving replicas. Distinguish independent dense-model inference from synchronized data-parallel training.
 - Partition a two-layer MLP across two GPUs: column-partition the first matrix, keep intermediate features local, row-partition the second matrix, and sum the partial output. Explain why the position of GELU matters. Extend the partition to attention heads and KV storage.
 - Interpret AllReduce through a numerical example. Compare communication startup latency with transfer time, and follow exposed communication on the critical path rather than assuming linear speedup.
-- Partition model layers into pipeline stages. Show how independent microbatches overlap, explain fill/drain bubbles, and retain the autoregressive token dependency for a single decode request. Distinguish pipeline parallelism from Week 2's prefill–decode disaggregation.
+- Partition model layers into pipeline stages. Show how independent microbatches overlap, explain fill/drain bubbles, and retain the autoregressive token dependency for a single decode request. Relate microbatch count to microbatch size under a fixed batch, including utilization and scheduling tradeoffs in pipeline frameworks. Distinguish pipeline parallelism from Week 2's prefill–decode disaggregation.
 - Follow DDP's different local minibatches through gradient averaging and matching optimizer updates. Shard optimizer state, gradients, and parameters progressively with ZeRO, then trace FSDP's parameter gathering and gradient reduction.
 - Calculate an explicit 8B mixed-precision Adam state budget across four GPUs: 128, 56, 44, and 32 GB per GPU for DDP and ZeRO stages 1–3. Separate persistent state from activation and temporary peak memory.
 - Split positions of the same long sequence with context parallelism. Keep local queries while circulating remote K/V, merge stable attention summaries, and explain causal workload imbalance. Compare ring attention with Ulysses' sequence-to-head exchange and distinguish both from Megatron sequence parallelism.
-- Extend the context partition to decode history: one new query can require attention across KV shards. State what is saved, what remains replicated, and what communication is still needed.
+- Extend the context partition to decode history: one new query can require attention across KV shards. State what is saved, what remains replicated, and what communication is still needed. Distinguish mathematical partitioning from TP/CP degree constraints imposed by head counts, layouts, and runtime implementations.
 - Introduce an MoE expert as a learned MLP, then trace four tokens through top-2 routing, expert ownership, dispatch, local expert computation, and weighted output combination. Explain expert-load imbalance and how DP attention can coexist with EP experts.
-- Combine explicit replica, TP, and PP groups. Compare different layouts under the same workload and GPU budget, with attention to per-GPU memory and latency targets.
+- Combine explicit replica, TP, and PP groups. Compare different layouts under the same workload and GPU budget, with attention to per-GPU memory and latency targets. Place communication groups using the real network topology, and explain the costs and possible benefits of context and expert parallelism across nodes.
 
 **Worked questions:** complete a tensor-parallel MLP and identify its necessary communication; diagnose a hypothetical decode profile in which increasing TP from 2 to 4 barely improves latency. Each question has an immediate solution slide. These are authored interview-style exercises.
 

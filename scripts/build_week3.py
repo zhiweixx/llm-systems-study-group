@@ -11,7 +11,12 @@ def all_slides():
     from week3.data import get_replica_slides, get_training_slides
     from week3.context import get_slides as context
     from week3.experts import get_slides as experts
-    return foundations()+get_replica_slides()+tensor_slides()+pipeline_slides()+get_training_slides()+context()+experts()+synthesis()
+    from week3.pipeline_lessons import get_slides as pipeline_lessons
+    from week3.configuration_lessons import degree_lessons, placement_lessons
+    pp, combined = pipeline_slides(), synthesis()
+    return (foundations()+get_replica_slides()+tensor_slides()+pp[:2]+pipeline_lessons()+pp[2:]
+            +get_training_slides()+context()+degree_lessons()+experts()
+            +combined[:2]+placement_lessons()+combined[2:])
 
 def build():
     slides=all_slides()

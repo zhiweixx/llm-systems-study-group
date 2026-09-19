@@ -40,9 +40,9 @@
 
 <section aria-labelledby="week3">
   <div class="section-heading"><h2 id="week3">Week 3: Scaling LLMs across GPUs</h2></div>
-  <p>Follow tensors across GPUs to understand data, tensor, pipeline, context, and expert parallelism. Worked examples connect each partition to the communication it requires, then compare serving layouts and ZeRO/FSDP training-state budgets.</p>
-  <p class="presentation-link"><a href="week-3/slides.html#slide-1">Present slides</a><span>45 slides · expanded teaching and reference deck</span></p>
-  <p class="muted">No fixed presentation duration. Use the Slides menu to choose a section. Interactive examples trace a <a href="week-3/slides.html#slide-9">tensor-parallel MLP</a>, <a href="week-3/slides.html#slide-24">ring attention</a>, and <a href="week-3/slides.html#slide-34">expert dispatch and return</a>.</p>
+  <p>Follow tensors across GPUs to understand data, tensor, pipeline, context, and expert parallelism. Worked examples connect each partition to the communication it requires, then compare serving layouts and ZeRO/FSDP training-state budgets. Additional lessons cover pipeline bubbles and microbatch choices, TP/CP constraints, and communication-aware placement within and across nodes.</p>
+  <p class="presentation-link"><a href="week-3/slides.html#slide-1">Present slides</a><span>50 slides · expanded teaching and reference deck</span></p>
+  <p class="muted">No fixed presentation duration. Use the Slides menu to choose a section. Interactive examples trace a <a href="week-3/slides.html#slide-9">tensor-parallel MLP</a>, <a href="week-3/slides.html#slide-26">ring attention</a>, and <a href="week-3/slides.html#slide-37">expert dispatch and return</a>.</p>
   <dl class="materials">
     <div><dt><a href="week-3/speaker-notes.html">Speaker notes</a></dt><dd>Per-slide explanations, tensor assumptions, communication details, and primary sources.</dd></div>
     <div><dt><a href="week-3/tp-exercise.py" download>PyTorch exercise</a></dt><dd>Run a two-rank tensor-parallel MLP correctness simulation on a CPU or one GPU.</dd></div>
@@ -50,10 +50,10 @@
   </dl>
   <h3>Discussion questions</h3>
   <ol class="question-list">
-    <li><a href="week-3/slides.html#slide-40">Complete a tensor-parallel MLP</a><span>Choose compatible matrix partitions, preserve nonlinear operations, and identify the required collective.</span></li>
-    <li><a href="week-3/slides.html#slide-42">Why does TP=4 barely improve decode?</a><span>Use a hypothetical profile to separate local computation from exposed communication, then compare serving layouts.</span></li>
+    <li><a href="week-3/slides.html#slide-45">Complete a tensor-parallel MLP</a><span>Choose compatible matrix partitions, preserve nonlinear operations, and identify the required collective.</span></li>
+    <li><a href="week-3/slides.html#slide-47">Why does TP=4 barely improve decode?</a><span>Use a hypothetical profile to separate local computation from exposed communication, then compare serving layouts.</span></li>
   </ol>
-  <p><a href="week-3/slides.html#slide-44">Take-home: simulate two tensor-parallel ranks</a>. The final slide gives a reference solution and links to the official PyTorch tutorial.</p>
+  <p><a href="week-3/slides.html#slide-49">Take-home: simulate two tensor-parallel ranks</a>. The final slide gives a reference solution and links to the official PyTorch tutorial.</p>
   <p class="muted">Each question has an immediate solution slide. Numerical examples are authored teaching exercises, not reported production benchmarks or company interview questions.</p>
 </section>
 
