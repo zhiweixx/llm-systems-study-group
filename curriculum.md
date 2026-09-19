@@ -2,7 +2,7 @@
 
 For readers who know Transformer models and PyTorch but have little GPU systems background. The course focuses on GPUs, LLM inference, and model serving, with training memory and sharding as supporting topics.
 
-Each meeting lasts 50 minutes. Week 1 uses a 24-slide, 30-minute presentation, reserving 15 minutes for discussion and 5 minutes of buffer. Week 2 offers 31 slides with about 35 minutes of suggested full content or an approximately 32-minute route. The shorter route preserves 15 minutes of discussion and roughly 3 minutes of buffer. These are planning estimates rather than rehearsed durations. Week 1 and Week 2 slides are published. Weeks 3–4 are planned and reserve at least 15 minutes for discussion.
+The original meeting format is 50 minutes. Week 1 uses a 24-slide, 30-minute presentation, reserving 15 minutes for discussion and 5 minutes of buffer. Week 2 offers 31 slides with about 35 minutes of suggested full content or an approximately 32-minute route. The shorter route preserves 15 minutes of discussion and roughly 3 minutes of buffer. These are planning estimates rather than rehearsed durations. Week 3 is an expanded 45-slide teaching and reference deck with no fixed presentation duration; its sections can be presented separately. Week 4 remains planned.
 
 ## Week 1: GPU memory and performance
 
@@ -49,16 +49,33 @@ Build on the performance vocabulary introduced in Week 1. Explain why prefill is
 
 ## Week 3: Multi-GPU parallelism and sharding
 
-Understand how extra GPUs change memory capacity, computation, and communication.
+Understand how extra GPUs change memory capacity, computation, and communication. The 45-slide deck covers all five parallelism dimensions through worked tensor examples, with no fixed presentation duration.
 
-- Read diagrams of AllReduce, AllGather, and ReduceScatter.
-- Distinguish data parallelism, serving replicas, tensor parallelism, and pipeline parallelism.
-- Estimate persistent training state under ZeRO/FSDP-style sharding, with explicit exclusions for activations and transient buffers.
-- Account for interconnect costs and pipeline bubbles when comparing schemes.
+- Establish separate capacity, latency, and throughput objectives. Define nodes, ranks, and communication groups, and show that each GPU has its own memory.
+- Route different inference requests to serving replicas. Distinguish independent dense-model inference from synchronized data-parallel training.
+- Partition a two-layer MLP across two GPUs: column-partition the first matrix, keep intermediate features local, row-partition the second matrix, and sum the partial output. Explain why the position of GELU matters. Extend the partition to attention heads and KV storage.
+- Interpret AllReduce through a numerical example. Compare communication startup latency with transfer time, and follow exposed communication on the critical path rather than assuming linear speedup.
+- Partition model layers into pipeline stages. Show how independent microbatches overlap, explain fill/drain bubbles, and retain the autoregressive token dependency for a single decode request. Distinguish pipeline parallelism from Week 2's prefill–decode disaggregation.
+- Follow DDP's different local minibatches through gradient averaging and matching optimizer updates. Shard optimizer state, gradients, and parameters progressively with ZeRO, then trace FSDP's parameter gathering and gradient reduction.
+- Calculate an explicit 8B mixed-precision Adam state budget across four GPUs: 128, 56, 44, and 32 GB per GPU for DDP and ZeRO stages 1–3. Separate persistent state from activation and temporary peak memory.
+- Split positions of the same long sequence with context parallelism. Keep local queries while circulating remote K/V, merge stable attention summaries, and explain causal workload imbalance. Compare ring attention with Ulysses' sequence-to-head exchange and distinguish both from Megatron sequence parallelism.
+- Extend the context partition to decode history: one new query can require attention across KV shards. State what is saved, what remains replicated, and what communication is still needed.
+- Introduce an MoE expert as a learned MLP, then trace four tokens through top-2 routing, expert ownership, dispatch, local expert computation, and weighted output combination. Explain expert-load imbalance and how DP attention can coexist with EP experts.
+- Combine explicit replica, TP, and PP groups. Compare different layouts under the same workload and GPU budget, with attention to per-GPU memory and latency targets.
 
-**Discussion:** an 8B inference model fits on one GPU. With four GPUs, compare four replicas, two groups of TP=2, and TP=4 under capacity, throughput, and latency objectives.
+**Worked questions:** complete a tensor-parallel MLP and identify its necessary communication; diagnose a hypothetical decode profile in which increasing TP from 2 to 4 barely improves latency. Each question has an immediate solution slide. These are authored interview-style exercises.
 
-**Reading:** [Ultra-Scale Playbook](https://nanotron-ultrascale-playbook.static.hf.space/index.html) sections on DP, ZeRO, TP, and PP; [Stanford CS336 lectures](https://github.com/stanford-cs336/lectures).
+**Take-home:** simulate two tensor-parallel MLP ranks using ordinary PyTorch, test multiple shapes, and handle biases correctly. The runnable companion checks equivalence to the unpartitioned MLP on a CPU or one GPU. A real two-GPU AllReduce implementation is an optional extension; simulation timings are not distributed performance measurements.
+
+**Discussion:** an 8B inference model fits on one GPU. With four GPUs, compare four replicas, two groups of TP=2, and TP=4 under capacity, throughput, and latency objectives. Then identify what would change for long contexts or a mixture-of-experts model.
+
+**Reading:**
+
+- [CS336 Lecture 8](https://raw.githubusercontent.com/stanford-cs336/lectures/main/lecture_08.pdf), [Berkeley Lecture 4](https://scalable-ai.eecs.berkeley.edu/S2026/assets/lecture_slides/lecture4.pdf), and the [Ultra-Scale Playbook](https://nanotron-ultrascale-playbook.static.hf.space/index.html) for distributed execution and parallelism.
+- [Megatron-LM](https://arxiv.org/abs/1909.08053) and the [PyTorch tensor-parallel tutorial](https://docs.pytorch.org/tutorials/intermediate/TP_tutorial.html) for the paired MLP partition.
+- [PyTorch DDP](https://docs.pytorch.org/docs/stable/notes/ddp.html), [ZeRO](https://arxiv.org/abs/1910.02054), and [PyTorch FSDP2](https://docs.pytorch.org/tutorials/intermediate/FSDP_tutorial.html) for replicated and sharded training state.
+- [Insu Jang's context-parallelism overview](https://insujang.github.io/2024-09-20/introducing-context-parallelism/), [Ring Attention](https://arxiv.org/abs/2310.01889), and [DeepSpeed Ulysses](https://arxiv.org/abs/2309.14509) for distributed attention. The slides distinguish each algorithm's partition and communication.
+- [Mixtral](https://arxiv.org/abs/2401.04088) and [vLLM expert-parallel deployment](https://docs.vllm.ai/en/latest/serving/expert_parallel_deployment/) for expert routing and inference placement.
 
 ## Week 4: LLM serving, scheduling, and KV management
 
