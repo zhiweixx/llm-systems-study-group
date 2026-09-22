@@ -12,7 +12,7 @@ The audience knows Transformer models and PyTorch but has little GPU systems bac
 | --- | --- | --- |
 | 1 | GPU memory and performance | [24-slide presentation](week-1-gpu-memory-short.html), [cheatsheet](week-1-llm-systems-cheatsheet.md), [speaker notes](week-1-short-speaker-notes.md) |
 | 2 | LLM inference performance | [31-slide presentation](week-2-inference.html), [speaker notes](week-2-speaker-notes.md), [benchmark lab](week-2-lab/README.md) |
-| 3 | Multi-GPU parallelism and sharding | [50-slide presentation](week-3-parallelism.html), [speaker notes](week-3-speaker-notes.md), [PyTorch exercise](week-3-tp-exercise.py) |
+| 3 | Multi-GPU parallelism and sharding | [21-slide visual overview](week-3-parallelism-overview.html), [overview notes](week-3-overview-speaker-notes.md), [50-slide reference](week-3-parallelism.html), [reference notes](week-3-speaker-notes.md), [PyTorch exercise](week-3-tp-exercise.py) |
 | 4 | LLM serving, scheduling, and KV management | Slides planned; [prefix-cache teaching notes](week-4-prefix-cache-notes.md) |
 
 Week 1 is dated **September 10, 2026**, with a 30-minute presentation. The story connects GPU memory traffic to lower precision, fusion, coalescing, and tiling, then applies the ideas to memory budgets and MFU. Memory calculations use decimal GB and MB. Each of Questions 1–2 has a separate solution slide immediately afterward. Prefix-cache hit rates are reserved for Week 4. The full plan is in [curriculum.md](curriculum.md).
@@ -24,6 +24,8 @@ A suggested **approximately 32-minute Week 2 route** skips slides 8, 27, and 28:
 Week 3 is an expanded **50-slide** deck with no fixed presentation duration. It covers serving replicas, tensor and pipeline parallelism, data-parallel training, ZeRO/FSDP, context parallelism, and expert parallelism. The sequence follows tensor ownership and communication through a paired MLP, a layer pipeline, distributed attention, and token routing to MoE experts. Context parallelism includes ring attention, stable summary merging, causal load balance, Ulysses, the distinction from Megatron sequence parallelism, and decode-history sharding. Additional lessons explain pipeline bubbles, the tradeoff between microbatch count and size, framework scheduling, TP/CP configuration constraints, communication-aware GPU placement, and multi-node CP/EP. Questions 1–2 appear on slides 45 and 47 with immediate solutions; slides 49–50 give a take-home MLP simulation and reference solution. The [runnable exercise](week-3-tp-exercise.py) checks the partition on a CPU or one GPU; it does not claim distributed performance measurements.
 
 ## Presenting and sharing
+
+The separate [21-slide Week 3 overview](https://zhiweixx.github.io/llm-systems-study-group/week-3/overview.html#slide-1) introduces the same parallelism and sharding concepts through ownership diagrams, a pipeline timeline, and a step-through ring-attention example. The original 50-slide deck remains intact at its existing URL for detailed study and exercises.
 
 Open the live presentation URL in a browser. Use the arrow keys, the Slides overview, or the Notes control. The HTML file is self-contained and can also be downloaded and opened offline. Use the presentation's Print / PDF control for a printable copy.
 
@@ -41,6 +43,7 @@ Share the live site URL for the complete materials, or a direct slide link such 
 - For Week 2, edit `scripts/build_week2.py` for slide content and speaker notes, or `site/slide-assets/week2/` for the interactive examples and styling. Run `python3 scripts/build_week2.py` to regenerate `week-2-inference.html` and `week-2-speaker-notes.md`.
 - Edit `week-2-lab/` for the optional inference benchmark and notebook.
 - For Week 3, edit the content modules in `scripts/week3/` and the frame generator `scripts/build_week3.py`, or `site/slide-assets/week3/` for controls and styling. Run `.venv/bin/python scripts/build_week3.py` to regenerate `week-3-parallelism.html` and `week-3-speaker-notes.md`. Edit `week-3-tp-exercise.py` for the runnable companion.
+- For the separate Week 3 overview, edit `scripts/week3/overview_*.py` and run `.venv/bin/python scripts/build_week3_overview.py`. Check it with `scripts/check_week3_overview.cjs`; this build does not modify the 50-slide deck.
 - Edit the Markdown sources for the cheatsheet, speaker notes, curriculum, and references.
 - Edit `site/index.html`, `site/page.html`, and `site/styles.css` for the site layout.
 - Push to `main`. GitHub Actions rebuilds and publishes the site automatically.

@@ -53,6 +53,7 @@ def main():
     document("week-1-short-speaker-notes.md", "Week 1 speaker notes", "week-1/speaker-notes.html", "../")
     document("week-2-speaker-notes.md", "Week 2 speaker notes", "week-2/speaker-notes.html", "../")
     document("week-3-speaker-notes.md", "Week 3 speaker notes", "week-3/speaker-notes.html", "../")
+    document("week-3-overview-speaker-notes.md", "Week 3 overview notes", "week-3/overview-notes.html", "../")
     shutil.copy2(ROOT / "week-3-tp-exercise.py", OUT / "week-3/tp-exercise.py")
     lab_files = [*LAB_FILES, *(name for name in LAB_OPTIONAL_FILES
                              if (ROOT / "week-2-lab" / name).is_file())]
@@ -66,6 +67,7 @@ def main():
     shutil.copy2(ROOT / "week-1-gpu-memory-short.html", OUT / "week-1/slides.html")
     shutil.copy2(ROOT / "week-2-inference.html", OUT / "week-2/slides.html")
     shutil.copy2(ROOT / "week-3-parallelism.html", OUT / "week-3/slides.html")
+    shutil.copy2(ROOT / "week-3-parallelism-overview.html", OUT / "week-3/overview.html")
     (OUT / ".nojekyll").touch()
     print(f"Built {len(list(OUT.rglob('*.html')))} HTML pages in _site/")
 

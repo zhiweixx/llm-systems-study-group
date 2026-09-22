@@ -36,6 +36,7 @@ def main():
         "week-1/slides.html", "week-1/cheatsheet.html", "week-1/speaker-notes.html",
         "week-2/slides.html", "week-2/speaker-notes.html", "week-2/lab.html",
         "week-3/slides.html", "week-3/speaker-notes.html",
+        "week-3/overview.html", "week-3/overview-notes.html",
         "week-4/prefix-cache.html",
     }
     assert {str(path.relative_to(OUT.resolve())) for path in pages} == expected_routes, "Unexpected or missing published HTML routes"
@@ -62,7 +63,8 @@ def main():
     for source_name, route, slide_count in (
             ("week-1-gpu-memory-short.html", "week-1/slides.html", 24),
             ("week-2-inference.html", "week-2/slides.html", 31),
-            ("week-3-parallelism.html", "week-3/slides.html", 50)):
+            ("week-3-parallelism.html", "week-3/slides.html", 50),
+            ("week-3-parallelism-overview.html", "week-3/overview.html", 21)):
         source = (ROOT / source_name).read_bytes()
         assert (OUT / route).read_bytes() == source, f"Slide output differs from source: {route}"
         slide_page = pages[(OUT / route).resolve()]
@@ -74,7 +76,7 @@ def main():
         assert (OUT / "week-2/lab" / name).read_bytes() == (ROOT / "week-2-lab" / name).read_bytes(), f"Lab output differs from source: {name}"
     assert (OUT / "week-3/tp-exercise.py").read_bytes() == (ROOT / "week-3-tp-exercise.py").read_bytes(), "Week 3 exercise output differs from source"
     assert (OUT / ".nojekyll").exists()
-    print(f"Validated {len(pages)} HTML pages, {checked} local links/anchors, 24 Week 1 slides, 31 Week 2 slides, 50 Week 3 slides, exercise downloads, and publication boundaries.")
+    print(f"Validated {len(pages)} HTML pages, {checked} local links/anchors, 24 Week 1 slides, 31 Week 2 slides, Week 3 decks of 50 and 21 slides, exercise downloads, and publication boundaries.")
 
 
 if __name__ == "__main__":
