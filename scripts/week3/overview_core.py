@@ -57,7 +57,7 @@ def foundations():
 
 def tensor_pipeline():
     slides=[]
-    b=text(75,193,'A two-layer MLP: H = GELU(XW₁), then Y = HW₂.',32)
+    b=text(75,193,'A two-layer MLP: H = GELU(XW₁), Y = HW₂.   Shapes: X [2, 4], W₁ [4, 8], W₂ [8, 4].',32)
     for g,x in enumerate([75,835]):
         color=[BLUE,TEAL][g]; part=['a','b'][g]; h=['Hₐ','Hᵦ'][g]
         b+=rect(x,265,690,337,'white')+text(x+24,309,f'GPU {g}',31,700,color=color)
