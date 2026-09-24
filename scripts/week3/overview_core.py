@@ -23,7 +23,7 @@ def foundations():
     b += text(75, 697, 'What is copied?     What is split?     What must move?', 35, 700)
     b += takeaway('Follow the tensors to understand the parallelism.')
     s=[slide('Parallelism and sharding',b,
-        'This is the 21-slide visual overview of Week 3. The original 50-slide lecture remains available as the detailed reference. '
+        'This is the 22-slide visual overview of Week 3. The original 50-slide lecture remains available as the detailed reference. '
         'We will distinguish three questions throughout: what is copied on multiple GPUs, what is partitioned across them, and '
         'what communication is needed to recover the intended computation. Boxes and colors indicate ownership or computation, '
         'not measured physical sizes or performance. The audience should know a Transformer forward pass and the basic GPU memory '
