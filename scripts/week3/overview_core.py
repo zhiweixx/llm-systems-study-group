@@ -2,6 +2,7 @@
 from .common import *
 
 MEG = ('Megatron-LM', 'https://arxiv.org/abs/1909.08053')
+SP = ('Megatron sequence parallelism', 'https://arxiv.org/abs/2205.05198')
 PIPE = ('Megatron: pipeline schedules', 'https://arxiv.org/abs/2104.04473')
 VLLM = ('vLLM parallelism', 'https://docs.vllm.ai/en/stable/serving/parallelism_scaling/')
 NCCL = ('NCCL collectives', 'https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/usage/collectives.html')
@@ -23,7 +24,7 @@ def foundations():
     b += text(75, 697, 'What is copied?     What is split?     What must move?', 35, 700)
     b += takeaway('Follow the tensors to understand the parallelism.')
     s=[slide('Parallelism and sharding',b,
-        'This is the 21-slide visual overview of Week 3. The original 50-slide lecture remains available as the detailed reference. '
+        'This is the 22-slide visual overview of Week 3. The original 50-slide lecture remains available as the detailed reference. '
         'We will distinguish three questions throughout: what is copied on multiple GPUs, what is partitioned across them, and '
         'what communication is needed to recover the intended computation. Boxes and colors indicate ownership or computation, '
         'not measured physical sizes or performance. The audience should know a Transformer forward pass and the basic GPU memory '
@@ -57,7 +58,8 @@ def foundations():
 
 def tensor_pipeline():
     slides=[]
-    b=text(75,193,'A two-layer MLP: H = GELU(XW₁), Y = HW₂.   Shapes: X [2, 4], W₁ [4, 8], W₂ [8, 4].',32)
+    b=text(75,186,'TP divides MLP features and attention heads across GPUs.',31)
+    b+=text(75,234,'MLP: H = GELU(XW₁), Y = HW₂.   Shapes: X [2, 4], W₁ [4, 8], W₂ [8, 4].',29)
     for g,x in enumerate([75,835]):
         color=[BLUE,TEAL][g]; part=['a','b'][g]; h=['Hₐ','Hᵦ'][g]
         b+=rect(x,265,690,337,'white')+text(x+24,309,f'GPU {g}',31,700,color=color)
@@ -71,8 +73,10 @@ def tensor_pipeline():
         b+=text(x+30,559,'Same input',27)+text(x+223,559,'Different columns',27)
     b+=text(800,675,'H = [ Hₐ | Hᵦ ]     ·     8 features split across 2 GPUs',34,700,anchor='middle')
     b+=takeaway('Tensor parallelism splits a computation inside a layer.')
-    slides.append(slide('TP: split the output features',b,
-        'The input X has two token rows and four features. The first MLP matrix W1 has shape [4,8]. Split its eight output '
+    slides.append(slide('TP in an MLP: split the output features',b,
+        'Tensor parallelism partitions computation within a layer. In an MLP we split intermediate features, and in standard '
+        'multi-head attention we can split attention heads. The next slide finishes this MLP example before the attention '
+        'example follows. The input X has two token rows and four features. The first MLP matrix W1 has shape [4,8]. Split its eight output '
         'columns into W1a and W1b, each [4,4]. Both GPUs have the same X. Each produces four of the eight intermediate '
         'features, and the elementwise GELU can be applied locally to each shard. Conceptually H is the concatenation of Ha '
         'and Hb; no physical concatenation is needed if the next operation consumes the existing partitions. In this diagram '
@@ -101,28 +105,65 @@ def tensor_pipeline():
         'path only. The backward pass also has communication. The boxes describe tensor ownership, not actual kernel boundaries.',
         (MEG,NCCL),section='Tensor parallelism'))
 
-    b=text(75,190,'Example: 4 query heads, 4 KV heads, TP = 2.',31)
-    b+=label_box(466,237,668,64,'Same token positions on both GPUs',size=29)
-    b+=arrow(630,310,420,357)+arrow(970,310,1180,357)
+    b=text(75,188,'Standard multi-head attention: 8 tokens, hidden size 8, TP = 2.',31)
+    b+=text(75,235,'4 attention heads, each of dimension 2. Each head has its own Q/K/V projections.',29)
     for g,x in enumerate([75,835]):
         color=[BLUE,TEAL][g]
-        b+=rect(x,366,690,291,'white')+text(x+25,410,f'GPU {g}',31,700,color=color)
+        b+=rect(x,281,690,365,'white')+text(x+25,326,f'GPU {g}',31,700,color=color)
+        b+=label_box(x+24,348,642,61,'Same complete X [8, 8]: tokens 1–8',size=29)
         for h in range(2):
-            xx=x+25+330*h
-            b+=label_box(xx,443,308,73,f'Head {2*g+h}',fill=PALE,size=29)
-            b+=text(xx+154,557,f'KV for head {2*g+h}',27,anchor='middle')
-        b+=text(x+345,619,'Local attention → output projection',28,anchor='middle')
-    b+=text(800,710,'Sum the output-projection contributions with AllReduce',30,700,color=BLUE,anchor='middle')
-    b+=takeaway('TP partitions features or heads while processing the same tokens.',
-                 'KV-cache savings depend on the model’s KV-head layout and implementation.')
-    slides.append(slide('TP can also split attention heads',b,
-        'For ordinary multi-head attention in this example, four query heads have four corresponding KV heads. Each GPU '
-        'computes two heads and stores the KV history for those heads. Both still process the same token positions. The output '
-        'projection mixes the head outputs; partitioning its input dimension produces partial sums that need to be added. '
-        'This is the same structure as the row-partitioned second MLP projection. Grouped-query or multi-query attention '
-        'has fewer KV heads, so not every TP degree produces an equal nonreplicated KV partition. Some implementations '
-        'replicate KV heads when the TP degree is too large. No general 1/TP KV saving is implied. TP reduces each rank’s '
-        'weight/computation share but introduces repeated communication within the model path.',(MEG,VLLM),section='Tensor parallelism'))
+            xx=x+24+334*h
+            b+=arrow(xx+154,413,xx+154,439)
+            b+=rect(xx,444,308,137,PALE if g == 0 else '#eef5f3',color)
+            b+=text(xx+154,480,f'Attention head {2*g+h}',28,700,color,anchor='middle')
+            b+=text(xx+154,519,'Q, K, V: each [8, 2]',27,anchor='middle')
+            b+=text(xx+154,558,'Head output [8, 2]',27,anchor='middle')
+        b+=text(x+345,620,f'Concatenate head outputs: O{["₀","₁"][g]} [8, 4]',29,700,color,anchor='middle')
+    b+=text(800,706,'Each local head has K/V for all 8 positions. Apply the usual causal mask.',29,anchor='middle')
+    b+=takeaway('Both GPUs process the same tokens through different attention heads.',
+                 'O₀ and O₁ are the head outputs before the attention output projection.')
+    slides.append(slide('TP in attention: split the attention heads',b,
+        'This example uses standard multi-head attention with one sequence of eight tokens, hidden size eight, four heads, '
+        'and head dimension two. Head means attention head, not a group of tokens. Both GPUs start from the same complete '
+        'X of shape [8,8]. Each head has its own learned query, key, and value projections from all eight input features '
+        'to two projected features. TP shards the output columns of these projection matrices, assigning heads 0–1 to GPU0 '
+        'and heads 2–3 to GPU1. Each local head has Q, K, V of shape [8,2] and computes attention for all eight positions. '
+        'For causal attention, query position i can attend only to positions at or before i. No remote-position KV is needed '
+        'inside these heads because each owner already has all positions for its assigned heads. Each GPU joins its two '
+        'local head outputs along the feature dimension to get O0 or O1 of shape [8,4]. The next slide shows the output '
+        'projection and communication. GQA and MQA have different KV-head layouts, so their partitioning and KV replication '
+        'constraints require separate treatment. The diagram does not assert universal 1/TP KV savings.',(MEG,),section='Tensor parallelism'))
+
+    b=text(75,190,'The output projection Wₒ [8, 8] combines the four attention heads.',31)
+    b+=text(75,237,'Split Wₒ by rows to match the head features held by each GPU.',29)
+    for g,x in enumerate([75,835]):
+        color=[BLUE,TEAL][g]; sub=['₀','₁'][g]
+        b+=rect(x,279,690,328,'white')+text(x+24,324,f'GPU {g}',31,700,color=color)
+        b+=text(x+28,375,f'O{sub} [8, 4]',27,700)
+        b+=text(x+194,375,f'Wₒ,{g} [4, 8]',27,700)
+        b+=text(x+470,375,f'U{sub} [8, 8]',27,700)
+        b+=grid(x+40,407,8,4,color,19)+text(x+135,498,'×',34)
+        b+=grid(x+190,445,4,8,color,19)+arrow(x+370,484,x+448,484)
+        b+=grid(x+473,407,8,8,PALE,19)
+        b+=text(x+82,584,'Head outputs',23,anchor='middle')
+        b+=text(x+266,584,f'Rows {4*g}–{4*g+3}',25,anchor='middle')
+        b+=text(x+548,584,'Partial contribution',24,anchor='middle')
+    b+=arrow(420,618,420,655)+arrow(1180,618,1180,655)
+    b+=rect(326,660,948,60,PALE,'none')
+    b+=text(800,699,'Y = U₀ + U₁     [8 tokens, 8 output features]',31,700,color=BLUE,anchor='middle')
+    b+=takeaway('AllReduce sums the contributions and gives Y [8, 8] to both GPUs.',
+                 'With SP, ReduceScatter instead keeps different token rows on each GPU.')
+    slides.append(slide('TP in attention: combine the head outputs',b,
+        'Continue the previous example. O0 contains the four features from heads 0–1 for all eight tokens, and O1 contains '
+        'the four features from heads 2–3 for all eight tokens. The full output projection Wo is [8,8]. Its input-feature '
+        'rows 0–3 belong to GPU0 and rows 4–7 to GPU1, giving local [4,8] weight shards. GPU0 computes U0 = O0 Wo,0 '
+        'and GPU1 computes U1 = O1 Wo,1. Each U has shape [8,8] but includes only the contribution from that GPU’s heads. '
+        'Y = U0 + U1 follows from multiplying the conceptual concatenation [O0 | O1] by the vertically stacked weight '
+        'shards. The raw head outputs concatenate, while the projected contributions add. Plain TP uses AllReduce(sum) '
+        'to give both GPUs the complete Y. Megatron SP uses ReduceScatter(sum) instead, so GPU0 retains full feature '
+        'vectors for tokens 1–4 and GPU1 retains them for tokens 5–8. The later TP+SP comparison shows how these layouts '
+        'alternate. Biases are omitted and must not be double-counted in a real implementation. This is a forward-pass '
+        'illustration, not a full backward communication schedule.',(MEG,SP),section='Tensor parallelism'))
 
     b=text(75,190,'Pipeline parallelism assigns different layers to different GPUs.',31)
     for stage,x in enumerate([75,875]):

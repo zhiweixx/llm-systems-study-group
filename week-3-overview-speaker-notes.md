@@ -2,7 +2,7 @@
 
 A visual introduction to data, tensor, pipeline, context, and expert parallelism, plus ZeRO/FSDP. The [50-slide reference](https://zhiweixx.github.io/llm-systems-study-group/week-3/slides.html) retains the detailed derivations and exercises.
 
-21 slides. Use the Slides menu to navigate by section. The standalone HTML includes all diagrams and works offline. External reference links require internet access.
+22 slides. Use the Slides menu to navigate by section. The standalone HTML includes all diagrams and works offline. External reference links require internet access.
 
 Diagrams and toy examples show tensor ownership and communication. Sizes and timings are schematic unless stated otherwise.
 
@@ -10,7 +10,7 @@ Diagrams and toy examples show tensor ownership and communication. Sizes and tim
 
 **Section: Introduction**
 
-This is the 21-slide visual overview of Week 3. The original 50-slide lecture remains available as the detailed reference. We will distinguish three questions throughout: what is copied on multiple GPUs, what is partitioned across them, and what communication is needed to recover the intended computation. Boxes and colors indicate ownership or computation, not measured physical sizes or performance. The audience should know a Transformer forward pass and the basic GPU memory and inference concepts from Weeks 1 and 2. Data parallelism, tensor parallelism, pipeline parallelism, context parallelism, expert parallelism, and training-state sharding solve different parts of the scaling problem.
+This is the 22-slide visual overview of Week 3. The original 50-slide lecture remains available as the detailed reference. We will distinguish three questions throughout: what is copied on multiple GPUs, what is partitioned across them, and what communication is needed to recover the intended computation. Boxes and colors indicate ownership or computation, not measured physical sizes or performance. The audience should know a Transformer forward pass and the basic GPU memory and inference concepts from Weeks 1 and 2. Data parallelism, tensor parallelism, pipeline parallelism, context parallelism, expert parallelism, and training-state sharding solve different parts of the scaling problem.
 
 
 ## 2. Separate memories, connected GPUs
@@ -54,11 +54,11 @@ The two colored blocks are parameter shards W0 and W1 of one layer, not two enti
 - [PyTorch FSDP2](https://docs.pytorch.org/tutorials/intermediate/FSDP_tutorial.html#how-fsdp2-works)
 - [NCCL collectives](https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/usage/collectives.html)
 
-## 7. TP: split the output features
+## 7. TP in an MLP: split the output features
 
 **Section: Tensor parallelism**
 
-The input X has two token rows and four features. The first MLP matrix W1 has shape [4,8]. Split its eight output columns into W1a and W1b, each [4,4]. Both GPUs have the same X. Each produces four of the eight intermediate features, and the elementwise GELU can be applied locally to each shard. Conceptually H is the concatenation of Ha and Hb; no physical concatenation is needed if the next operation consumes the existing partitions. In this diagram the blue and teal cells denote different feature ownership, while pale inputs are replicated. The matrix convention is XW; PyTorch Linear stores its weight transposed. Biases and gated-MLP variants are omitted to isolate the partition.
+Tensor parallelism partitions computation within a layer. In an MLP we split intermediate features, and in standard multi-head attention we can split attention heads. The next slide finishes this MLP example before the attention example follows. The input X has two token rows and four features. The first MLP matrix W1 has shape [4,8]. Split its eight output columns into W1a and W1b, each [4,4]. Both GPUs have the same X. Each produces four of the eight intermediate features, and the elementwise GELU can be applied locally to each shard. Conceptually H is the concatenation of Ha and Hb; no physical concatenation is needed if the next operation consumes the existing partitions. In this diagram the blue and teal cells denote different feature ownership, while pale inputs are replicated. The matrix convention is XW; PyTorch Linear stores its weight transposed. Biases and gated-MLP variants are omitted to isolate the partition.
 
 - [Megatron-LM](https://arxiv.org/abs/1909.08053)
 
@@ -71,16 +71,24 @@ W2 has shape [8,4]. Partition its eight input-feature rows into W2a and W2b, eac
 - [Megatron-LM](https://arxiv.org/abs/1909.08053)
 - [NCCL collectives](https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/usage/collectives.html)
 
-## 9. TP can also split attention heads
+## 9. TP in attention: split the attention heads
 
 **Section: Tensor parallelism**
 
-For ordinary multi-head attention in this example, four query heads have four corresponding KV heads. Each GPU computes two heads and stores the KV history for those heads. Both still process the same token positions. The output projection mixes the head outputs; partitioning its input dimension produces partial sums that need to be added. This is the same structure as the row-partitioned second MLP projection. Grouped-query or multi-query attention has fewer KV heads, so not every TP degree produces an equal nonreplicated KV partition. Some implementations replicate KV heads when the TP degree is too large. No general 1/TP KV saving is implied. TP reduces each rank’s weight/computation share but introduces repeated communication within the model path.
+This example uses standard multi-head attention with one sequence of eight tokens, hidden size eight, four heads, and head dimension two. Head means attention head, not a group of tokens. Both GPUs start from the same complete X of shape [8,8]. Each head has its own learned query, key, and value projections from all eight input features to two projected features. TP shards the output columns of these projection matrices, assigning heads 0–1 to GPU0 and heads 2–3 to GPU1. Each local head has Q, K, V of shape [8,2] and computes attention for all eight positions. For causal attention, query position i can attend only to positions at or before i. No remote-position KV is needed inside these heads because each owner already has all positions for its assigned heads. Each GPU joins its two local head outputs along the feature dimension to get O0 or O1 of shape [8,4]. The next slide shows the output projection and communication. GQA and MQA have different KV-head layouts, so their partitioning and KV replication constraints require separate treatment. The diagram does not assert universal 1/TP KV savings.
 
 - [Megatron-LM](https://arxiv.org/abs/1909.08053)
-- [vLLM parallelism](https://docs.vllm.ai/en/stable/serving/parallelism_scaling/)
 
-## 10. PP: split the model by layers
+## 10. TP in attention: combine the head outputs
+
+**Section: Tensor parallelism**
+
+Continue the previous example. O0 contains the four features from heads 0–1 for all eight tokens, and O1 contains the four features from heads 2–3 for all eight tokens. The full output projection Wo is [8,8]. Its input-feature rows 0–3 belong to GPU0 and rows 4–7 to GPU1, giving local [4,8] weight shards. GPU0 computes U0 = O0 Wo,0 and GPU1 computes U1 = O1 Wo,1. Each U has shape [8,8] but includes only the contribution from that GPU’s heads. Y = U0 + U1 follows from multiplying the conceptual concatenation [O0 | O1] by the vertically stacked weight shards. The raw head outputs concatenate, while the projected contributions add. Plain TP uses AllReduce(sum) to give both GPUs the complete Y. Megatron SP uses ReduceScatter(sum) instead, so GPU0 retains full feature vectors for tokens 1–4 and GPU1 retains them for tokens 5–8. The later TP+SP comparison shows how these layouts alternate. Biases are omitted and must not be double-counted in a real implementation. This is a forward-pass illustration, not a full backward communication schedule.
+
+- [Megatron-LM](https://arxiv.org/abs/1909.08053)
+- [Megatron sequence parallelism](https://arxiv.org/abs/2205.05198)
+
+## 11. PP: split the model by layers
 
 **Section: Pipeline parallelism**
 
@@ -89,7 +97,7 @@ This toy model has six layers and two pipeline stages. The first stage owns laye
 - [vLLM parallelism](https://docs.vllm.ai/en/stable/serving/parallelism_scaling/)
 - [Megatron: pipeline schedules](https://arxiv.org/abs/2104.04473)
 
-## 11. PP: overlap work with microbatches
+## 12. PP: overlap work with microbatches
 
 **Section: Pipeline parallelism**
 
@@ -97,7 +105,7 @@ Read each horizontal row as one GPU and columns as equal stage-time intervals. W
 
 - [Megatron: pipeline schedules](https://arxiv.org/abs/2104.04473)
 
-## 12. Context parallelism divides one long sequence
+## 13. Context parallelism divides one long sequence
 
 **Section: Context and expert parallelism**
 
@@ -106,7 +114,7 @@ Begin with the workload: a single long sequence can create too much activation o
 - [Megatron CP](https://docs.nvidia.com/megatron-core/developer-guide/latest/user-guide/features/context_parallel.html)
 - [Ring Attention](https://arxiv.org/abs/2310.01889)
 
-## 13. Ring attention brings remote keys to each query
+## 14. Ring attention brings remote keys to each query
 
 **Section: Context and expert parallelism**
 
@@ -115,15 +123,16 @@ This two-frame schematic uses the same ownership as the preceding slide. Frame 1
 - [Ring Attention](https://arxiv.org/abs/2310.01889)
 - [Megatron CP](https://docs.nvidia.com/megatron-core/developer-guide/latest/user-guide/features/context_parallel.html)
 
-## 14. CP and Megatron SP shard different operations
+## 15. CP and Megatron SP shard different operations
 
 **Section: Context and expert parallelism**
 
 Read each row as the same simplified Transformer fragment, not as a full layer specification. The original model may have pre-norm, residual paths, and multiple normalization operations; those details are omitted to focus on activation ownership. G0 and G1 mean GPU 0 and GPU 1. Upper row: pure CP retains token ownership across attention and token-wise operators; attention exchanges remote KV to satisfy dependencies. Lower row: Megatron’s TP-associated SP uses token partitions for token-wise operations such as normalization and dropout. Inside TP attention and linear regions, GPUs process all token positions but different heads or matrix shards. The two “head shard” labels denote different head subsets, and the weight shards also differ. A typical forward transition from TP computation to the SP norm region uses ReduceScatter, then AllGather before the next TP region. This is not a claim that every activation in TP is full-width, nor that all methods named sequence parallelism behave this way. DeepSpeed Ulysses uses the same name for another mechanism. CP and TP-associated SP can coexist; the separate rows isolate their roles.
 
 - [Megatron CP](https://docs.nvidia.com/megatron-core/developer-guide/latest/user-guide/features/context_parallel.html)
+- [Megatron SP](https://arxiv.org/abs/2205.05198)
 
-## 15. Route tokens to experts, then return the outputs
+## 16. Route tokens to experts, then return the outputs
 
 **Section: Context and expert parallelism**
 
@@ -132,7 +141,7 @@ An MoE expert is a complete learned MLP, not an attention head or a GPU. This ov
 - [MoE architecture](https://arxiv.org/abs/2401.04088)
 - [Megatron token dispatch](https://docs.nvidia.com/megatron-core/developer-guide/0.19.0/apidocs/core/core.transformer.moe.token_dispatcher.html)
 
-## 16. Uneven routing leaves some GPUs waiting
+## 17. Uneven routing leaves some GPUs waiting
 
 **Section: Context and expert parallelism**
 
@@ -140,7 +149,7 @@ Continue the top-1, four-expert placement from the previous slide, but with four
 
 - [vLLM expert parallelism](https://docs.vllm.ai/en/latest/serving/expert_parallel_deployment/)
 
-## 17. Combine groups to build one GPU layout
+## 18. Combine groups to build one GPU layout
 
 **Section: Choosing a layout**
 
@@ -149,7 +158,7 @@ This diagram combines three dimensions without introducing another parallelism a
 - [Megatron-LM](https://arxiv.org/abs/2104.04473)
 - [vLLM parallelism](https://docs.vllm.ai/en/stable/serving/parallelism_scaling/)
 
-## 18. Choose placement from the communication pattern
+## 19. Choose placement from the communication pattern
 
 **Section: Choosing a layout**
 
@@ -158,7 +167,7 @@ The example places a two-way TP group inside each node and pipeline boundaries b
 - [vLLM parallelism](https://docs.vllm.ai/en/stable/serving/parallelism_scaling/)
 - [Ultra-Scale Playbook](https://nanotron-ultrascale-playbook.static.hf.space/index.html)
 
-## 19. Communication can offset the benefit of more GPUs
+## 20. Communication can offset the benefit of more GPUs
 
 **Section: Choosing a layout**
 
@@ -167,7 +176,7 @@ The bars are a qualitative illustration, not benchmark measurements or a predict
 - [Scaling Book: inference](https://jax-ml.github.io/scaling-book/inference/)
 - [vLLM parallelism](https://docs.vllm.ai/en/stable/serving/parallelism_scaling/)
 
-## 20. Choose a degree that fits the model
+## 21. Choose a degree that fits the model
 
 **Section: Choosing a layout**
 
@@ -176,7 +185,7 @@ A parallel degree counts the GPUs or ranks in that communication group. These si
 - [Megatron: TP constraints](https://github.com/NVIDIA/Megatron-LM/blob/main/megatron/core/transformer/transformer_config.py)
 - [Megatron: CP constraints](https://github.com/NVIDIA/Megatron-LM/blob/main/megatron/training/arguments.py)
 
-## 21. Six methods: tensor ownership and communication
+## 22. Six methods: tensor ownership and communication
 
 **Section: Choosing a layout**
 

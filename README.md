@@ -12,7 +12,7 @@ The audience knows Transformer models and PyTorch but has little GPU systems bac
 | --- | --- | --- |
 | 1 | GPU memory and performance | [24-slide presentation](week-1-gpu-memory-short.html), [cheatsheet](week-1-llm-systems-cheatsheet.md), [speaker notes](week-1-short-speaker-notes.md) |
 | 2 | LLM inference performance | [31-slide presentation](week-2-inference.html), [speaker notes](week-2-speaker-notes.md), [benchmark lab](week-2-lab/README.md) |
-| 3 | Multi-GPU parallelism and sharding | [21-slide visual overview](week-3-parallelism-overview.html), [overview notes](week-3-overview-speaker-notes.md), [50-slide reference](week-3-parallelism.html), [reference notes](week-3-speaker-notes.md), [PyTorch exercise](week-3-tp-exercise.py) |
+| 3 | Multi-GPU parallelism and sharding | [22-slide visual overview](week-3-parallelism-overview.html), [overview notes](week-3-overview-speaker-notes.md), [50-slide reference](week-3-parallelism.html), [reference notes](week-3-speaker-notes.md), [PyTorch exercise](week-3-tp-exercise.py) |
 | 4 | LLM serving, scheduling, and KV management | Slides planned; [prefix-cache teaching notes](week-4-prefix-cache-notes.md) |
 
 Week 1 is dated **September 10, 2026**, with a 30-minute presentation. The story connects GPU memory traffic to lower precision, fusion, coalescing, and tiling, then applies the ideas to memory budgets and MFU. Memory calculations use decimal GB and MB. Each of Questions 1–2 has a separate solution slide immediately afterward. Prefix-cache hit rates are reserved for Week 4. The full plan is in [curriculum.md](curriculum.md).
@@ -25,7 +25,7 @@ Week 3 is an expanded **50-slide** deck with no fixed presentation duration. It 
 
 ## Presenting and sharing
 
-The separate [21-slide Week 3 overview](https://zhiweixx.github.io/llm-systems-study-group/week-3/overview.html#slide-1) introduces the same parallelism and sharding concepts through ownership diagrams, a pipeline timeline, and a step-through ring-attention example. The original 50-slide deck remains intact at its existing URL for detailed study and exercises.
+The separate [22-slide Week 3 overview](https://zhiweixx.github.io/llm-systems-study-group/week-3/overview.html#slide-1) introduces the same parallelism and sharding concepts through ownership diagrams, a pipeline timeline, and a step-through ring-attention example. The original 50-slide deck remains intact at its existing URL for detailed study and exercises.
 
 Open the live presentation URL in a browser. Use the arrow keys, the Slides overview, or the Notes control. The HTML file is self-contained and can also be downloaded and opened offline. Use the presentation's Print / PDF control for a printable copy.
 

@@ -70,7 +70,9 @@ def get_slides():
         [RING,CP],section='Context and expert parallelism'))
 
     s = text(75,202,'Megatron sequence parallelism (SP) complements tensor parallelism.',30)
-    for x,label in [(260,'Attention'),(705,'Norm / dropout'),(1150,'MLP')]:
+    s += text(445,236,'Attention',31,700,BLUE,'middle')
+    s += text(445,270,'+ output projection',25,500,INK,'middle')
+    for x,label in [(705,'Norm / dropout'),(1150,'MLP')]:
         s += text(x+185,261,label,31,700,BLUE,'middle')
     s += lines(75,335,['CP','alone'],30,43,weight=700,color=BLUE)
     for x in [260,705,1150]:
@@ -82,11 +84,13 @@ def get_slides():
     s += _ownership_card(705,521,'Tokens 1–4','Tokens 5–8')
     s += _ownership_card(1150,521,'All tokens; features a','All tokens; features b')
     s += arrow(630,593,705,593) + arrow(1075,593,1150,593)
+    s += text(667,705,'ReduceScatter',23,700,BLUE,'middle')
+    s += text(1112,705,'AllGather',23,700,BLUE,'middle')
     s += takeaway('CP distributes long-context attention. Megatron SP reduces replication around TP.',
                    'G0/G1 = GPUs. Simplified layer fragment; SP terminology varies.')
     slides.append(slide('CP and Megatron SP shard different operations',s,
         'Read each row as the same simplified Transformer fragment, not as a full layer specification. The original model may have pre-norm, residual paths, and multiple normalization operations; those details are omitted to focus on activation ownership. G0 and G1 mean GPU 0 and GPU 1. Upper row: pure CP retains token ownership across attention and token-wise operators; attention exchanges remote KV to satisfy dependencies. Lower row: Megatron’s TP-associated SP uses token partitions for token-wise operations such as normalization and dropout. Inside TP attention and linear regions, GPUs process all token positions but different heads or matrix shards. The two “head shard” labels denote different head subsets, and the weight shards also differ. A typical forward transition from TP computation to the SP norm region uses ReduceScatter, then AllGather before the next TP region. This is not a claim that every activation in TP is full-width, nor that all methods named sequence parallelism behave this way. DeepSpeed Ulysses uses the same name for another mechanism. CP and TP-associated SP can coexist; the separate rows isolate their roles.',
-        [CP],section='Context and expert parallelism'))
+        [CP,('Megatron SP', 'https://arxiv.org/abs/2205.05198')],section='Context and expert parallelism'))
 
     s = text(75,202,'MoE (mixture of experts): four MLPs on two GPUs; A/B start on GPU 0.',29)
     s += text(75,246,'Top-1 routing selects one expert per token. Expert weights stay on their owners.',29)
