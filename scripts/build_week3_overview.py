@@ -1,4 +1,4 @@
-"""Build a separate 22-slide visual overview; never write the detailed deck."""
+"""Build a separate 21-slide visual overview; never write the detailed deck."""
 from pathlib import Path
 from html import escape as esc
 import json
@@ -12,7 +12,7 @@ def all_slides():
     from week3.overview_context_experts import get_slides as context_experts
     from week3.overview_synthesis import get_slides as synthesis
     slides = foundations()+data()+tensor_pipeline()+context_experts()+synthesis()
-    assert len(slides) == 22
+    assert len(slides) == 21
     return slides
 
 def build():

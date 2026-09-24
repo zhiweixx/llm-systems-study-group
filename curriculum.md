@@ -51,7 +51,7 @@ Build on the performance vocabulary introduced in Week 1. Explain why prefill is
 
 Understand how extra GPUs change memory capacity, computation, and communication. The 50-slide deck covers all five parallelism dimensions through worked tensor examples, with no fixed presentation duration.
 
-A separate [22-slide visual overview](https://zhiweixx.github.io/llm-systems-study-group/week-3/overview.html) follows the same topics with less text: replicas and shards; DP and ZeRO/FSDP; TP and PP; CP and Megatron sequence parallelism; EP; combined groups and placement. Use the original 50-slide deck for the detailed derivations and exercises.
+A separate [21-slide visual overview](https://zhiweixx.github.io/llm-systems-study-group/week-3/overview.html) follows the same topics with less text: replicas and shards; DP and ZeRO/FSDP; TP and PP; CP and Megatron sequence parallelism; EP; combined groups and placement. Use the original 50-slide deck for the detailed derivations and exercises.
 
 - Establish separate capacity, latency, and throughput objectives. Define nodes, ranks, and communication groups, and show that each GPU has its own memory.
 - Route different inference requests to serving replicas. Distinguish independent dense-model inference from synchronized data-parallel training.

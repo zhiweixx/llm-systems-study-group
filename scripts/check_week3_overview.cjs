@@ -12,7 +12,7 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'.build/week3-overvie
  await page.goto('file://'+path.join(root,'week-3-parallelism-overview.html'));
  const settle=()=>page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));await settle();
  const slides=await page.locator('.slide').evaluateAll(ss=>ss.map(s=>({id:s.id,title:s.dataset.title,section:s.dataset.section})));
- assert.equal(slides.length,22);
+ assert.equal(slides.length,21);
  const inspect=async label=>{
   const result=await page.locator('.slide:not([hidden])>svg').evaluate(svg=>{
    const visible=e=>{const r=e.getBoundingClientRect();return r.width>0&&r.height>0&&getComputedStyle(e).visibility!=='hidden';};
