@@ -2,7 +2,7 @@
 
 Slides, worked questions, cheatsheets, and references for a four-week study group on GPUs, LLM systems, inference, and model serving.
 
-**[Live site](https://zhiweixx.github.io/llm-systems-study-group/)** · **[Present Week 1](https://zhiweixx.github.io/llm-systems-study-group/week-1/slides.html#slide-1)** · **[Present Week 2](https://zhiweixx.github.io/llm-systems-study-group/week-2/slides.html#slide-1)** · **[Present Week 3](https://zhiweixx.github.io/llm-systems-study-group/week-3/slides.html#slide-1)**
+**[Live site](https://zhiweixx.github.io/llm-systems-study-group/)** · **[Present Week 1](https://zhiweixx.github.io/llm-systems-study-group/week-1/slides.html#slide-1)** · **[Present Week 2](https://zhiweixx.github.io/llm-systems-study-group/week-2/slides.html#slide-1)** · **[Present Week 3](https://zhiweixx.github.io/llm-systems-study-group/week-3/slides.html#slide-1)** · **[Present Week 4](https://zhiweixx.github.io/llm-systems-study-group/week-4/slides.html#slide-1)**
 
 The audience knows Transformer models and PyTorch but has little GPU systems background. Materials use a plain academic style and state the assumptions behind calculations.
 
@@ -13,7 +13,7 @@ The audience knows Transformer models and PyTorch but has little GPU systems bac
 | 1 | GPU memory and performance | [24-slide presentation](week-1-gpu-memory-short.html), [cheatsheet](week-1-llm-systems-cheatsheet.md), [speaker notes](week-1-short-speaker-notes.md) |
 | 2 | LLM inference performance | [31-slide presentation](week-2-inference.html), [speaker notes](week-2-speaker-notes.md), [benchmark lab](week-2-lab/README.md) |
 | 3 | Multi-GPU parallelism and sharding | [22-slide visual overview](week-3-parallelism-overview.html), [overview notes](week-3-overview-speaker-notes.md), [50-slide reference](week-3-parallelism.html), [reference notes](week-3-speaker-notes.md), [PyTorch exercise](week-3-tp-exercise.py) |
-| 4 | LLM serving, scheduling, and KV management | Slides planned; [prefix-cache teaching notes](week-4-prefix-cache-notes.md) |
+| 4 | LLM serving, scheduling, and KV management | [24 main + 3 appendix slides](week-4-serving.html), [speaker notes](week-4-speaker-notes.md), [serving lab](week-4-lab/README.md) |
 
 Week 1 is dated **September 10, 2026**, with a 30-minute presentation. The story connects GPU memory traffic to lower precision, fusion, coalescing, and tiling, then applies the ideas to memory budgets and MFU. Memory calculations use decimal GB and MB. Each of Questions 1–2 has a separate solution slide immediately afterward. Prefix-cache hit rates are reserved for Week 4. The full plan is in [curriculum.md](curriculum.md).
 
@@ -22,6 +22,8 @@ Week 2 is dated **September 17, 2026**, with about 35 minutes of suggested full 
 A suggested **approximately 32-minute Week 2 route** skips slides 8, 27, and 28: the H100 numerical example and the optional experiment section. It retains the arithmetic-intensity prerequisites, complete online-softmax derivation (17–19), and mixed-batch setup (23). All 31 slides remain available for reading. Timings are planning estimates, not rehearsed durations; the shorter route reserves 15 minutes for discussion and roughly 3 minutes of buffer in a 50-minute meeting. Advanced disaggregation scheduling and network placement belong to Week 4.
 
 Week 3 is an expanded **50-slide** deck with no fixed presentation duration. It covers serving replicas, tensor and pipeline parallelism, data-parallel training, ZeRO/FSDP, context parallelism, and expert parallelism. The sequence follows tensor ownership and communication through a paired MLP, a layer pipeline, distributed attention, and token routing to MoE experts. Context parallelism includes ring attention, stable summary merging, causal load balance, Ulysses, the distinction from Megatron sequence parallelism, and decode-history sharding. Additional lessons explain pipeline bubbles, the tradeoff between microbatch count and size, framework scheduling, TP/CP configuration constraints, communication-aware GPU placement, and multi-node CP/EP. Questions 1–2 appear on slides 45 and 47 with immediate solutions; slides 49–50 give a take-home MLP simulation and reference solution. The [runnable exercise](week-3-tp-exercise.py) checks the partition on a CPU or one GPU; it does not claim distributed performance measurements.
+
+Week 4 follows a four-GPU chat service through prefix reuse, KV lifetime, queueing, scheduling, routing, and fixed-budget deployment choices. The 24-slide main route targets about 35 minutes plus 15 minutes of discussion. Two evidence-based questions have immediate solutions; three optional appendix slides explain speculative decoding. Interactive examples show shared prefix blocks and a token-budget schedule. All numerical cases are explicitly hypothetical. The companion lab prints reproducible vLLM benchmark commands by default and runs them only with `--run`; the deck includes no newly measured GPU results.
 
 ## Presenting and sharing
 
@@ -44,6 +46,7 @@ Share the live site URL for the complete materials, or a direct slide link such 
 - Edit `week-2-lab/` for the optional inference benchmark and notebook.
 - For Week 3, edit the content modules in `scripts/week3/` and the frame generator `scripts/build_week3.py`, or `site/slide-assets/week3/` for controls and styling. Run `.venv/bin/python scripts/build_week3.py` to regenerate `week-3-parallelism.html` and `week-3-speaker-notes.md`. Edit `week-3-tp-exercise.py` for the runnable companion.
 - For the separate Week 3 overview, edit `scripts/week3/overview_*.py` and run `.venv/bin/python scripts/build_week3_overview.py`. Check it with `scripts/check_week3_overview.cjs`; this build does not modify the 50-slide deck.
+- For Week 4, edit `scripts/week4/` and `site/slide-assets/week4/`, then run `.venv/bin/python scripts/build_week4.py`. Run `scripts/check_week4.cjs` with Playwright and Chrome for layout, navigation, interaction, and print checks. The optional serving experiment is in `week-4-lab/`.
 - Edit the Markdown sources for the cheatsheet, speaker notes, curriculum, and references.
 - Edit `site/index.html`, `site/page.html`, and `site/styles.css` for the site layout.
 - Push to `main`. GitHub Actions rebuilds and publishes the site automatically.

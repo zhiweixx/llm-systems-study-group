@@ -2,7 +2,7 @@
 
 For readers who know Transformer models and PyTorch but have little GPU systems background. The course focuses on GPUs, LLM inference, and model serving, with training memory and sharding as supporting topics.
 
-The original meeting format is 50 minutes. Week 1 uses a 24-slide, 30-minute presentation, reserving 15 minutes for discussion and 5 minutes of buffer. Week 2 offers 31 slides with about 35 minutes of suggested full content or an approximately 32-minute route. The shorter route preserves 15 minutes of discussion and roughly 3 minutes of buffer. These are planning estimates rather than rehearsed durations. Week 3 is an expanded 50-slide teaching and reference deck with no fixed presentation duration; its sections can be presented separately. Week 4 remains planned.
+The original meeting format is 50 minutes. Week 1 uses a 24-slide, 30-minute presentation, reserving 15 minutes for discussion and 5 minutes of buffer. Week 2 offers 31 slides with about 35 minutes of suggested full content or an approximately 32-minute route. The shorter route preserves 15 minutes of discussion and roughly 3 minutes of buffer. These are planning estimates rather than rehearsed durations. Week 3 is an expanded 50-slide teaching and reference deck with no fixed presentation duration; its sections can be presented separately. Week 4 has a 24-slide main route of about 35 minutes followed by 15 minutes of discussion, plus a separate three-slide speculative-decoding appendix.
 
 ## Week 1: GPU memory and performance
 
@@ -79,22 +79,27 @@ A separate [21-slide visual overview](https://zhiweixx.github.io/llm-systems-stu
 - [Insu Jang's context-parallelism overview](https://insujang.github.io/2024-09-20/introducing-context-parallelism/), [Ring Attention](https://arxiv.org/abs/2310.01889), and [DeepSpeed Ulysses](https://arxiv.org/abs/2309.14509) for distributed attention. The slides distinguish each algorithm's partition and communication.
 - [Mixtral](https://arxiv.org/abs/2401.04088) and [vLLM expert-parallel deployment](https://docs.vllm.ai/en/latest/serving/expert_parallel_deployment/) for expert routing and inference placement.
 
-## Week 4: LLM serving, scheduling, and KV management
+## Week 4: LLM serving — caching, scheduling, and deployment
 
-Connect an inference engine to an online workload and explicit service objectives.
+Follow one hypothetical 8B chat service on four GPUs. Assume one full replica fits on each GPU; apply the previous weeks’ inference and parallelism concepts to a continuously arriving workload.
 
-- Define TTFT, TPOT/ITL, throughput, tail latency, and SLOs.
-- Compare static batching, continuous batching, and chunked prefill.
-- Extend Week 2's paged KV allocation example to physical prefix sharing and admission control.
-- Develop Week 2's prefill–decode disaggregation preview with pool sizing, scheduling, KV-transfer costs, and network-aware placement under latency objectives.
-- Distinguish token hit rate, request hit rate, and KV-pool occupancy, including cold/warm cache state and eviction.
-- Design a load test varying request rate and prompt/output lengths.
+| Main route | Time | Content |
+| --- | --- | --- |
+| Slides 1–3 | 4 min | Request lifecycle, router, engine scheduler, KV manager, latency targets |
+| Slides 4–10 | 9 min | Exact prefix reuse, shared blocks, KV lifetime, hit metrics, Question 1 and solution |
+| Slides 11–18 | 15 min | Arrival queues, three resource budgets, chunked scheduling, admission, routing, fixed-budget PD, Question 2 and solution |
+| Slides 19–23 | 7 min | Controlled load testing, offered rate versus concurrency, latency attainment, diagnostic experiments, lab |
+| Slide 24 | 15 min | Defend a serving decision and a falsifiable experiment |
 
-**Worked exercise:** shared-prefix hits and physical KV storage, moved from Week 1. The [prefix-cache teaching notes](https://zhiweixx.github.io/llm-systems-study-group/week-4/prefix-cache.html) preserve the explanation, assumptions, question, and solution for this week.
+Times are planning estimates and include brief question pauses. Slides 25–27 are an optional 5–8-minute extension on speculative decoding: greedy verification, sampling correction, and the latency break-even condition.
 
-**Discussion:** design an 8B chat service with four GPUs, mixed prompt lengths, and repeated system prompts. Specify model placement, KV budget, scheduling, and experiments that test the proposed latency targets.
+**Question 1:** prefix hits increase after a routing change, but first-token tail latency worsens. Use per-replica queue and prefill observations to explain the outcome and propose a controlled routing experiment.
 
-**Reading:** [vLLM optimization](https://docs.vllm.ai/en/stable/configuration/optimization/), [prefix caching](https://docs.vllm.ai/en/stable/features/automatic_prefix_caching/), and [Scaling Book: inference](https://jax-ml.github.io/scaling-book/inference/).
+**Question 2:** short chat streams stall when long prompts arrive, while isolated decode kernels are unchanged. Use iteration timelines to propose a scheduling intervention, then compare shared and PD pools with the same four GPUs.
+
+**Take-home:** use the [serving lab](https://zhiweixx.github.io/llm-systems-study-group/week-4/lab.html) to sweep offered request rate and report tail latency, failures, and requests meeting explicit targets. A fixed-length random workload is the baseline; repeated-prefix traces and cold/warm cache controls are a separate extension. No GPU benchmark measurements are fabricated for the teaching deck.
+
+**Reading:** [vLLM prefix-cache design](https://docs.vllm.ai/en/stable/design/prefix_caching/), [scheduling configuration](https://docs.vllm.ai/en/latest/configuration/optimization/), [benchmark CLI](https://docs.vllm.ai/en/latest/cli/bench/serve/), [DistServe](https://www.usenix.org/system/files/osdi24-zhong-yinmin.pdf), [Sarathi-Serve](https://www.usenix.org/system/files/osdi24-agrawal.pdf), and [speculative decoding](https://proceedings.mlr.press/v202/leviathan23a.html). Slide-level notes identify supporting sources. The earlier [prefix-cache notes](https://zhiweixx.github.io/llm-systems-study-group/week-4/prefix-cache.html) remain an additional calculation reference.
 
 ## Shared teaching model
 

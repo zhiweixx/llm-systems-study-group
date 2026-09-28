@@ -59,6 +59,24 @@
   <p class="muted">Each question has an immediate solution slide. Numerical examples are authored teaching exercises, not reported production benchmarks or company interview questions.</p>
 </section>
 
+<section aria-labelledby="week4">
+  <div class="section-heading"><h2 id="week4">Week 4: LLM serving</h2></div>
+  <p>Follow a four-GPU chat service from prefix reuse to queues, scheduling, routing, and deployment. Connect engine decisions to user latency, then design a controlled request-rate sweep.</p>
+  <p class="presentation-link"><a href="week-4/slides.html#slide-1">Present slides</a><span>24 main slides · about 35 minutes + 15-minute discussion</span></p>
+  <p class="muted">Slides 25–27 form an optional speculative-decoding appendix. Step controls trace prefix-block sharing and chunked scheduling; all diagrams are included in the offline HTML.</p>
+  <dl class="materials">
+    <div><dt><a href="week-4/speaker-notes.html">Speaker notes</a></dt><dd>Teaching sequence, assumptions, discussion guidance, and primary sources.</dd></div>
+    <div><dt><a href="week-4/lab.html">Serving benchmark lab</a></dt><dd>Dry-run-first vLLM request-rate sweep, cold/warm cache controls, and latency objectives.</dd></div>
+    <div><dt><a href="week-4/slides.html" download="llm-systems-week-4.html">Download HTML slides</a></dt><dd>Present offline or use Print / PDF for a printable copy.</dd></div>
+  </dl>
+  <h3>Discussion questions</h3>
+  <ol class="question-list">
+    <li><a href="week-4/slides.html#slide-9">More cache hits, worse first-token latency</a><span>Explain a routing change using queue and prefill evidence.</span></li>
+    <li><a href="week-4/slides.html#slide-17">Long prompts interrupt short chat streams</a><span>Compare scheduling and deployment experiments under a fixed four-GPU budget.</span></li>
+  </ol>
+  <p class="muted">Each question has an immediate solution. Numerical observations are hypothetical teaching cases; the lab produces data only when run against a real server.</p>
+</section>
+
 <section aria-labelledby="course-plan">
   <h2 id="course-plan">The four-week plan</h2>
   <div class="table-wrap"><table>
@@ -67,7 +85,7 @@
       <tr><td>1</td><td>GPU memory and performance</td><td><a href="week-1/slides.html#slide-1">Slides available</a></td></tr>
       <tr><td>2</td><td>LLM inference performance</td><td><a href="week-2/slides.html#slide-1">Slides</a> · <a href="week-2/lab.html">Benchmark lab</a></td></tr>
       <tr><td>3</td><td>Multi-GPU parallelism and sharding</td><td><a href="week-3/overview.html#slide-1">22-slide overview</a> · <a href="week-3/slides.html#slide-1">50-slide reference</a></td></tr>
-      <tr><td>4</td><td>LLM serving, scheduling, and KV management</td><td><a href="week-4/prefix-cache.html">Prefix-cache notes</a>; slides planned</td></tr>
+      <tr><td>4</td><td>LLM serving, scheduling, and KV management</td><td><a href="week-4/slides.html#slide-1">Slides</a> · <a href="week-4/lab.html">Serving lab</a></td></tr>
     </tbody>
   </table></div>
   <p><a href="curriculum.html">Read the curriculum and discussion prompts</a></p>

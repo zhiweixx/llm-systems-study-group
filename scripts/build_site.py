@@ -64,6 +64,12 @@ def main():
     document("week-2-lab/README.md", "Week 2 benchmark lab", "week-2/lab.html", "../",
              link_targets={name: f"lab/{name}" for name in lab_files})
     document("week-4-prefix-cache-notes.md", "Week 4 prefix-cache notes", "week-4/prefix-cache.html", "../")
+    document("week-4-speaker-notes.md", "Week 4 speaker notes", "week-4/speaker-notes.html", "../")
+    document("week-4-lab/README.md", "Week 4 serving lab", "week-4/lab.html", "../",
+             link_targets={"run_benchmark.py": "lab/run_benchmark.py"})
+    (OUT / "week-4/lab").mkdir(parents=True, exist_ok=True)
+    shutil.copy2(ROOT / "week-4-lab/run_benchmark.py", OUT / "week-4/lab/run_benchmark.py")
+    shutil.copy2(ROOT / "week-4-serving.html", OUT / "week-4/slides.html")
     shutil.copy2(ROOT / "week-1-gpu-memory-short.html", OUT / "week-1/slides.html")
     shutil.copy2(ROOT / "week-2-inference.html", OUT / "week-2/slides.html")
     shutil.copy2(ROOT / "week-3-parallelism.html", OUT / "week-3/slides.html")
