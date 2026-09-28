@@ -2,7 +2,7 @@
 
 For readers who know Transformer models and PyTorch but have little GPU systems background. The course focuses on GPUs, LLM inference, and model serving, with training memory and sharding as supporting topics.
 
-The original meeting format is 50 minutes. Week 1 uses a 24-slide, 30-minute presentation, reserving 15 minutes for discussion and 5 minutes of buffer. Week 2 offers 31 slides with about 35 minutes of suggested full content or an approximately 32-minute route. The shorter route preserves 15 minutes of discussion and roughly 3 minutes of buffer. These are planning estimates rather than rehearsed durations. Week 3 is an expanded 50-slide teaching and reference deck with no fixed presentation duration; its sections can be presented separately. Week 4 has a 24-slide main route of about 35 minutes followed by 15 minutes of discussion, plus a separate three-slide speculative-decoding appendix.
+The original meeting format is 50 minutes. Week 1 uses a 24-slide, 30-minute presentation, reserving 15 minutes for discussion and 5 minutes of buffer. Week 2 offers 31 slides with about 35 minutes of suggested full content or an approximately 32-minute route. The shorter route preserves 15 minutes of discussion and roughly 3 minutes of buffer. These are planning estimates rather than rehearsed durations. Week 3 is an expanded 50-slide teaching and reference deck with no fixed presentation duration; its sections can be presented separately. Week 4 is a 30-slide teaching deck that opens with six slides on speculative decoding. Its full content needs roughly 45–50 minutes plus discussion; choose sections if retaining the original 50-minute meeting format.
 
 ## Week 1: GPU memory and performance
 
@@ -79,19 +79,23 @@ A separate [21-slide visual overview](https://zhiweixx.github.io/llm-systems-stu
 - [Insu Jang's context-parallelism overview](https://insujang.github.io/2024-09-20/introducing-context-parallelism/), [Ring Attention](https://arxiv.org/abs/2310.01889), and [DeepSpeed Ulysses](https://arxiv.org/abs/2309.14509) for distributed attention. The slides distinguish each algorithm's partition and communication.
 - [Mixtral](https://arxiv.org/abs/2401.04088) and [vLLM expert-parallel deployment](https://docs.vllm.ai/en/latest/serving/expert_parallel_deployment/) for expert routing and inference placement.
 
-## Week 4: LLM serving — caching, scheduling, and deployment
+## Week 4: Speculative decoding and LLM serving
 
-Follow one hypothetical 8B chat service on four GPUs. Assume one full replica fits on each GPU; apply the previous weeks’ inference and parallelism concepts to a continuously arriving workload.
+Begin with how speculative decoding can emit several tokens per target-model pass. Follow a concrete draft through parallel verification, rejection, KV rollback, and a timing comparison. Then follow one hypothetical 8B chat service on four GPUs. Assume one full replica fits on each GPU; apply the previous weeks’ inference and parallelism concepts to a continuously arriving workload.
 
-| Main route | Time | Content |
-| --- | --- | --- |
-| Slides 1–3 | 4 min | Request lifecycle, router, engine scheduler, KV manager, latency targets |
-| Slides 4–10 | 9 min | Exact prefix reuse, shared blocks, KV lifetime, hit metrics, Question 1 and solution |
-| Slides 11–18 | 15 min | Arrival queues, three resource budgets, chunked scheduling, admission, routing, fixed-budget PD, Question 2 and solution |
-| Slides 19–23 | 7 min | Controlled load testing, offered rate versus concurrency, latency attainment, diagnostic experiments, lab |
-| Slide 24 | 15 min | Defend a serving decision and a falsifiable experiment |
+| Slides | Content |
+| --- | --- |
+| 1 | Opening and teaching sequence |
+| 2–7 | Speculative decoding: motivation, parallel target verification, greedy acceptance, rejected suffix and KV rollback, sampling correction, and the speedup tradeoff |
+| 8–9 | Four-GPU serving case, request lifecycle, router, engine scheduler, KV manager, latency targets |
+| 10–16 | Exact prefix reuse, shared blocks, KV lifetime, hit metrics, Question 1 and solution |
+| 17–24 | Arrival queues, three resource budgets, chunked scheduling, admission, routing, fixed-budget PD, Question 2 and solution |
+| 25–29 | Controlled load testing, offered rate versus concurrency, latency attainment, diagnostic experiments, lab |
+| 30 | Discussion: defend a serving decision and a falsifiable experiment |
 
-Times are planning estimates and include brief question pauses. Slides 25–27 are an optional 5–8-minute extension on speculative decoding: greedy verification, sampling correction, and the latency break-even condition.
+Plan approximately 12–15 minutes for speculative decoding and 45–50 minutes for the complete teaching sequence, followed by 15 minutes of discussion. These are planning estimates rather than rehearsed durations. For a 50-minute meeting, select a shorter route or continue the remaining sections in another session.
+
+**Speculative-decoding learning goals:** explain why draft tokens can be verified together even though ordinary generation is sequential; trace accepted tokens, the first correction, and the discarded suffix; distinguish greedy equality from sampling-distribution preservation; and judge speedup using draft cost, verification cost, and committed tokens per round.
 
 **Question 1:** prefix hits increase after a routing change, but first-token tail latency worsens. Use per-replica queue and prefill observations to explain the outcome and propose a controlled routing experiment.
 

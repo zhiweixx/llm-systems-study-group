@@ -12,7 +12,10 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'.build/week4-qa');
  await page.goto('file://'+path.join(root,'week-4-serving.html'));
  const settle=()=>page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));await settle();
  const slides=await page.locator('.slide').evaluateAll(ss=>ss.map(s=>({id:s.id,title:s.dataset.title,section:s.dataset.section})));
- assert.equal(slides.length,27);
+ assert.equal(slides.length,30);
+ assert.ok(slides.slice(1,7).every(s=>s.section.startsWith('Speculative decoding')));
+ assert.ok(slides[14].title.startsWith('Question 1'));
+ assert.ok(slides[22].title.startsWith('Question 2'));
  const inspect=async label=>{
   const result=await page.locator('.slide:not([hidden])>svg').evaluate(svg=>{
    const visible=e=>{const r=e.getBoundingClientRect();return r.width>0&&r.height>0&&getComputedStyle(e).visibility!=='hidden';};
@@ -54,15 +57,31 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'.build/week4-qa');
    await page.evaluate(k=>window.week4Examples.show(k,0),kind);
   }
  }
+ await page.evaluate(()=>window.deck.goTo(6));await settle();
+ for(const [a,v,expected] of [[0,14,.5],[2,14,1.5],[4,14,2.5],[4,34,1.25],[0,34,.25],[4,10,50/16]]){
+  await page.evaluate(([a,v])=>{
+   const accepted=document.getElementById('spec-accepted'),verify=document.getElementById('spec-verify');
+   accepted.value=a;verify.value=v;verify.dispatchEvent(new Event('input',{bubbles:true}));
+  },[a,v]);await settle();
+  const state=await page.evaluate(()=>window.specCost.state());
+  assert.equal(state.speedup,expected);assert.equal(state.emitted,a+1);
+  await inspect(`spec-cost-${a}-${v}`);
+  await page.locator('.slide:not([hidden])').screenshot({path:path.join(out,`spec-cost-${a}-${v}.png`)});
+ }
+ const exampleState=await page.evaluate(()=>window.week4Examples.state());
+ assert.equal(exampleState['spec-greedy'].count,5);assert.equal(exampleState['spec-sampling'].count,3);
  await page.locator('#notes-toggle').click();assert.ok((await page.locator('#notes-content').innerText()).length>100);await page.keyboard.press('Escape');
  await page.locator('#overview-toggle').click();assert.equal(await page.locator('.overview-item').count(),slides.length);await page.keyboard.press('Escape');
  for(const [width,height] of [[1280,770],[1024,650],[768,560]]){
   await page.setViewportSize({width,height});await settle();const b=await page.locator('#stage').boundingBox();assert.ok(b.x>=-1&&b.y>=-1&&b.x+b.width<=width+1);
  }
  const before=await page.evaluate(()=>window.week4Examples.state());
+ const costBefore=await page.evaluate(()=>window.specCost.state());
  await page.evaluate(()=>window.dispatchEvent(new Event('beforeprint')));
  const printing=await page.evaluate(()=>window.week4Examples.state());for(const s of Object.values(printing))assert.equal(s.index,s.count-1);
+ assert.equal((await page.evaluate(()=>window.specCost.state())).speedup,1.5);
  await page.evaluate(()=>window.dispatchEvent(new Event('afterprint')));assert.deepEqual(await page.evaluate(()=>window.week4Examples.state()),before);
+ assert.deepEqual(await page.evaluate(()=>window.specCost.state()),costBefore);
  await fs.writeFile(path.join(out,'review.json'),JSON.stringify({slides,issues,errors,requests},null,2));await browser.close();
  console.log(JSON.stringify({slides:slides.length,issues,errors,requests},null,2));
  assert.deepEqual(errors,[]);assert.deepEqual(requests,[]);assert.deepEqual(issues,[]);

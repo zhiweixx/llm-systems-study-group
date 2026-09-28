@@ -3,16 +3,17 @@ METRICS=('vLLM metrics', 'https://docs.vllm.ai/en/latest/design/metrics/')
 BERKELEY=('Berkeley L18', 'https://scalable-ai.eecs.berkeley.edu/S2026/assets/lecture_slides/lecture_18.pdf')
 
 def get_slides():
-    body=text(75,214,'LLM serving',68,700,color=BLUE)+text(75,280,'Caching, scheduling, and deployment',40)
-    body+=lines(75,377,['A fast kernel is only one part of a fast service.', 'What happens when requests keep arriving?'],34,gap=50)
-    stages=[('Reuse work','Prefix caching'),('Share the GPU','Scheduling'),('Choose a replica','Routing'),('Test the service','Latency under load')]
+    body=text(75,214,'Speculative decoding and LLM serving',59,700,color=BLUE)
+    body+=text(75,280,'From faster token generation to a responsive service',36)
+    body+=lines(75,368,['First: can we generate several tokens with one target-model call?', 'Then: what happens when many requests keep arriving?'],32,gap=52)
+    stages=[('Generate faster','Speculative decoding'),('Reuse and schedule','Prefixes + queues'),('Serve under load','Routing + measurement')]
     for i,(a,b) in enumerate(stages):
-        x=75+i*370
-        body+=line(x,475,x+320,475)+text(x,525,a,30,700,color=BLUE)+text(x,566,b,27)
-    body+=text(75,670,'35 min teaching + 15 min discussion',27,color=MUTED)
-    body+=takeaway('Goal: serve more requests while meeting explicit latency targets.', '24 main slides; optional speculative-decoding appendix on slides 25–27.')
+        x=75+i*500
+        body+=line(x,486,x+440,486)+text(x,536,a,32,700,color=BLUE)+text(x,579,b,29)
+    body+=text(75,682,'Speculative decoding: 12–15 min. Select later sections to fit the meeting.',28,color=MUTED)
+    body+=takeaway('Goal: reduce generation time while meeting explicit service latency targets.', '30 slides · about 45–50 min of teaching material, followed by discussion.')
     out=[slide('Week 4 · From model execution to an online service',body,
-        'Suggested route: slides 1–3, 4 minutes; 4–10, 9 minutes; 11–18, 15 minutes; 19–23, 7 minutes. Slide 24 begins the 15-minute discussion. Times include brief question pauses and are estimates. Slides 25–27 are a separate optional 5–8-minute extension. This lesson applies the kernels, inference engine, and GPU layouts studied in Weeks 1–3. All numerical cases and diagrams are authored teaching examples unless a source is explicitly described as a measurement.',section='Setup · 4 min')]
+        'Open with the six-slide speculative-decoding lesson: motivation, parallel verification, greedy acceptance, KV rollback and the bonus, exact sampling, then a timing experiment. Allow 12–15 minutes including the interactive steps. Slides 8–9 establish the four-GPU serving case; 10–16 teach prefix reuse; 17–24 cover scheduling, routing and deployment; 25–29 cover measurement; 30 begins discussion. The expanded full sequence is approximately 45–50 minutes plus 15 minutes of discussion, not a rehearsed duration. Choose later sections if retaining a 50-minute meeting. Numerical cases and diagrams are authored teaching examples, not GPU measurements.',section='Opening')]
     body=text(75,202,'One case throughout: an 8B chat service on four GPUs',34,700)
     body+=text(75,246,'Assume the model fits on one GPU; start with four independent replicas.',28)
     body+=label_box(75,328,240,92,'Requests',size=32)+arrow(315,374,405,374)+label_box(405,328,260,92,'Router',size=32)
