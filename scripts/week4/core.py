@@ -10,10 +10,10 @@ def get_slides():
     for i,(a,b) in enumerate(stages):
         x=75+i*500
         body+=line(x,486,x+440,486)+text(x,536,a,32,700,color=BLUE)+text(x,579,b,29)
-    body+=text(75,682,'Speculative decoding: 12–15 min. Select later sections to fit the meeting.',28,color=MUTED)
-    body+=takeaway('Goal: reduce generation time while meeting explicit service latency targets.', '30 slides · about 45–50 min of teaching material, followed by discussion.')
+    body+=text(75,682,'Speculative decoding: visual walkthrough, then correctness and performance theory.',28,color=MUTED)
+    body+=takeaway('Goal: reduce generation time while meeting explicit service latency targets.', '34 slides · about 55–60 min of teaching material, followed by discussion.')
     out=[slide('Week 4 · From model execution to an online service',body,
-        'Open with the six-slide speculative-decoding lesson: motivation, parallel verification, greedy acceptance, KV rollback and the bonus, exact sampling, then a timing experiment. Allow 12–15 minutes including the interactive steps. Slides 8–9 establish the four-GPU serving case; 10–16 teach prefix reuse; 17–24 cover scheduling, routing and deployment; 25–29 cover measurement; 30 begins discussion. The expanded full sequence is approximately 45–50 minutes plus 15 minutes of discussion, not a rehearsed duration. Choose later sections if retaining a 50-minute meeting. Numerical cases and diagrams are authored teaching examples, not GPU measurements.',section='Opening')]
+        'Open with the six-slide speculative-decoding lesson: motivation, parallel verification, greedy acceptance, KV rollback and the bonus, exact sampling, then a timing experiment. Allow 12–15 minutes including the interactive steps, then 8–10 minutes for the four theory slides: exact sampling, acceptance as distribution overlap, expected tokens per round, and expected speedup. Slides 12–13 establish the four-GPU serving case; 14–20 teach prefix reuse; 21–28 cover scheduling, routing and deployment; 29–33 cover measurement; 34 begins discussion. The expanded full sequence is approximately 55–60 minutes plus 15 minutes of discussion, not a rehearsed duration. Choose later sections if retaining a 50-minute meeting. Numerical cases and diagrams are authored teaching examples, not GPU measurements.',section='Opening')]
     body=text(75,202,'One case throughout: an 8B chat service on four GPUs',34,700)
     body+=text(75,246,'Assume the model fits on one GPU; start with four independent replicas.',28)
     body+=label_box(75,328,240,92,'Requests',size=32)+arrow(315,374,405,374)+label_box(405,328,260,92,'Router',size=32)

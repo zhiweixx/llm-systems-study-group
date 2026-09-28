@@ -1,8 +1,8 @@
 # Week 4 — Speculative decoding and LLM serving
 
-30 slides, beginning with six lessons on speculative decoding (12–15 minutes). The full teaching sequence is approximately 45–50 minutes, plus 15 minutes of discussion. These are planning estimates; choose sections for a 50-minute meeting.
+34 slides, beginning with six visual lessons on speculative decoding (12–15 minutes) and four theory slides (8–10 minutes). The full teaching sequence is approximately 55–60 minutes, plus 15 minutes of discussion. These are planning estimates; choose sections for a 50-minute meeting.
 
-Route: 1 opening; 2–7 speculative decoding; 8–9 serving case and lifecycle; 10–16 prefix reuse and Question 1; 17–24 scheduling, routing, deployment and Question 2; 25–29 measurement; 30 discussion. Questions have immediate solution slides.
+Route: 1 opening; 2–7 speculative decoding walkthrough; 8–11 correctness and performance theory; 12–13 serving case and lifecycle; 14–20 prefix reuse and Question 1; 21–28 scheduling, routing, deployment and Question 2; 29–33 measurement; 34 discussion. Questions have immediate solution slides.
 
 All diagrams and numerical cases are authored teaching examples, not published GPU measurements or verified company interview questions. Primary sources appear on the slides and below. Documentation checked September 28, 2026; benchmark flags should be checked against the installed vLLM version.
 
@@ -12,7 +12,7 @@ The [companion lab](https://zhiweixx.github.io/llm-systems-study-group/week-4/la
 
 **Section: Opening**
 
-Open with the six-slide speculative-decoding lesson: motivation, parallel verification, greedy acceptance, KV rollback and the bonus, exact sampling, then a timing experiment. Allow 12–15 minutes including the interactive steps. Slides 8–9 establish the four-GPU serving case; 10–16 teach prefix reuse; 17–24 cover scheduling, routing and deployment; 25–29 cover measurement; 30 begins discussion. The expanded full sequence is approximately 45–50 minutes plus 15 minutes of discussion, not a rehearsed duration. Choose later sections if retaining a 50-minute meeting. Numerical cases and diagrams are authored teaching examples, not GPU measurements.
+Open with the six-slide speculative-decoding lesson: motivation, parallel verification, greedy acceptance, KV rollback and the bonus, exact sampling, then a timing experiment. Allow 12–15 minutes including the interactive steps, then 8–10 minutes for the four theory slides: exact sampling, acceptance as distribution overlap, expected tokens per round, and expected speedup. Slides 12–13 establish the four-GPU serving case; 14–20 teach prefix reuse; 21–28 cover scheduling, routing and deployment; 29–33 cover measurement; 34 begins discussion. The expanded full sequence is approximately 55–60 minutes plus 15 minutes of discussion, not a rehearsed duration. Choose later sections if retaining a 50-minute meeting. Numerical cases and diagrams are authored teaching examples, not GPU measurements.
 
 
 ## 2. Speculative decoding: fewer serial target calls
@@ -56,7 +56,7 @@ Before verification the target cache covers P except its last token u. Verificat
 
 The bars represent probability mass, not a measured set of exactly 100 draws. q proposes A with probability 0.8, and we keep each A with probability 0.75, giving accepted A mass 0.6. Proposed B is always accepted, giving mass 0.2. Rejection occurs with total probability 0.2. The positive residual p−q is 0 for A and 0.2 for B, so its normalized distribution puts probability 1 on B; adding that correction gives final mass 0.4 for B. For a proposed x, q(x)>0, so the ratio is defined. If p=q, acceptance is certain and the zero residual is never used. For a sequence, each distribution conditions on the same accepted history, and accept/reject decisions stop at the first rejection; later precomputed target scores are discarded. If all candidates pass, draw the bonus directly from the next target distribution. Use distributions after the intended temperature or other sampling transformations. Distributional equivalence does not imply identical text for every random seed. This is classical exact speculative sampling, not an approximation that silently changes the target distribution.
 
-- [Chen et al., Algorithm 1](https://arxiv.org/html/2302.01318v1)
+- [Chen et al., Algorithm 2](https://arxiv.org/html/2302.01318v1)
 - [Leviathan et al., §2–3](https://proceedings.mlr.press/v202/leviathan23a/leviathan23a.pdf)
 
 ## 7. When does the extra work pay off?
@@ -68,7 +68,40 @@ Start at two accepted proposals, matching the greedy toy. Four sequential draft 
 - [Leviathan et al., §2–3](https://proceedings.mlr.press/v202/leviathan23a/leviathan23a.pdf)
 - [vLLM speculative decoding](https://docs.vllm.ai/en/latest/features/speculative_decoding/)
 
-## 8. The case: four GPUs, variable prompts, latency targets
+## 8. Why speculative sampling is exact
+
+**Section: Speculative decoding theory · 8–10 min**
+
+This proof formalizes the two-token probability example. Fix a history and let p and q be normalized target and proposal distributions over a common vocabulary, after any intended sampling transformations. Propose X from q and accept with probability min(1,p(X)/q(X)). For any vocabulary item x, the joint probability of proposing and accepting x is min(p(x),q(x)). Its sum is the total acceptance probability. Since p and q each sum to one, the omitted target mass Z=sum_x max(p(x)-q(x),0) equals the rejection probability 1-sum_x min(p(x),q(x)). On rejection draw Y from r(x)=max(p(x)-q(x),0)/Z. This contributes unconditional mass Z*r(x), exactly filling the missing target mass. Thus min(p,q)+max(p-q,0)=p pointwise. When q(x)=0 the algorithm cannot propose x, so it never evaluates that ratio for such an x; positive target mass there comes through the residual. When Z=0, the rejection branch has zero probability. At successive positions, use the distributions for the actual accepted history and discard the invalid suffix after a rejection. This yields the target autoregressive joint distribution by the chain rule. The proof concerns the ideal probability algorithm; floating-point implementations can differ numerically. Chen uses the opposite p/q naming; this deck consistently uses p for target and q for draft.
+
+- [Leviathan et al., App. A.1](https://proceedings.mlr.press/v202/leviathan23a/leviathan23a.pdf)
+- [Chen et al., §4.2](https://arxiv.org/html/2302.01318v1#S4.SS2)
+
+## 9. Acceptance measures distribution overlap
+
+**Section: Speculative decoding theory**
+
+For a fixed context, sum the accepted mass min(p(x),q(x)) over the vocabulary. Using min(p,q)=(p+q-|p-q|)/2 and the fact that both distributions sum to one, alpha=1-(1/2)sum|p-q|. The subtracted term is total variation distance. In our example TV=(|0.6-0.8|+|0.4-0.2|)/2=0.2 and total acceptance is 0.8. Distinguish this 80% overall acceptance from the 75% acceptance conditional on having proposed A. Perfectly equal distributions give alpha=1; disjoint supports give alpha=0. This is a fixed-context result for stochastic speculative sampling, not simply the fraction of matching argmax predictions. Real histories give different acceptance probabilities. A draft with greater overlap may also be more expensive, so overlap alone does not determine speedup. For one-token exact couplings, this overlap is also the largest possible probability that a q-distributed proposal and p-distributed output agree; no mass at x can be shared beyond min(p(x),q(x)).
+
+- [Leviathan et al., §3](https://proceedings.mlr.press/v202/leviathan23a/leviathan23a.pdf)
+
+## 10. Expected tokens per verification round
+
+**Section: Speculative decoding theory**
+
+Let A be the consecutive accepted-prefix length among gamma proposals. N=A+1 includes one correction on rejection or one bonus when all proposals pass. This counts emitted tokens before EOS or a maximum-output cutoff. The tail-sum identity for a positive integer N gives E[N]=sum_{k=1}^{gamma+1}P(N>=k)=1+sum_{i=1}^{gamma}P(A>=i). No independence assumption is needed for this first formula. If P(proposal i accepted | proposals 1 through i-1 accepted) equals the same alpha at every reached depth, P(A>=i)=alpha^i and the finite geometric series follows. This is a model assumption, not a consequence of knowing one global average acceptance rate. At alpha=1 use the continuous limit gamma+1; alpha=0 gives one output per round. The chart displays the probability that each output position exists: 1,0.8,0.64,0.512,0.4096. Their sum is 3.3616, not 1+4*0.8=4.2, because a later accepted draft token is useful only if all earlier proposals survive. Actual context- and depth-dependent survival rates can be inserted directly into the general identity. A single round emits an integer; this fractional result is the average over many rounds. The paper derives the same geometric model using an i.i.d. acceptance assumption.
+
+- [Leviathan et al., §3](https://proceedings.mlr.press/v202/leviathan23a/leviathan23a.pdf)
+
+## 11. Expected speedup and draft length
+
+**Section: Speculative decoding theory**
+
+Use a stationary fixed-workload approximation and enough generation rounds for average costs to be meaningful. In the displayed cost model a round costs C(gamma)=gamma*D+V(gamma)+O. Its average time per output token is C/E[N], versus T for target-only decoding, so speedup is T*E[N]/C. If round cost also varies, use E[C]/E[N] for the long-run average time per token, not E[C/N] or the average of per-round speedups. For variable contexts and system load, measure aggregate elapsed time and emitted tokens against a matched baseline. The illustrative curve assumes alpha=0.8, T=10 ms, D=1 ms, V(gamma)=10+gamma ms and O=2 ms. At gamma=4, E[N]=3.3616 and C=20 ms, giving speedup 1.6808. Integer gamma=4 maximizes this example over 1 through 12. The earlier slider chose exactly two accepted tokens in one round, hence 1.5x; this theory uses an average over random acceptance, hence 1.68x. The classic simplified formula follows if verification takes exactly one target step and overhead is zero: S=(1-alpha^(gamma+1))/((1-alpha)*(1+gamma*c)), c=D/T. For gamma=1 this is (1+alpha)/(1+c), so alpha>c is the break-even condition under those simplified assumptions only. For alpha<1, E[N] approaches 1/(1-alpha), but positive draft cost grows with gamma. The marginal benefit of one more proposal is alpha^(gamma+1); increasing gamma helps only when this extra progress per extra millisecond exceeds current E[N]/C. Context length, KV traffic, concurrency, draft memory, synchronization and sampling implementation affect the measured costs. Faster generation for one stream does not by itself imply higher throughput or better latency under load.
+
+- [Leviathan et al., §3](https://proceedings.mlr.press/v202/leviathan23a/leviathan23a.pdf)
+
+## 12. The case: four GPUs, variable prompts, latency targets
 
 **Section: Setup · 4 min**
 
@@ -76,7 +109,7 @@ Use one model and precision across all experiments. A replica is a complete mode
 
 - [vLLM metrics](https://docs.vllm.ai/en/latest/design/metrics/)
 
-## 9. Follow one request from arrival to completion
+## 13. Follow one request from arrival to completion
 
 **Section: Setup · 4 min**
 
@@ -85,7 +118,7 @@ This is a logical sequence, not a scale drawing or a promise of one GPU kernel p
 - [vLLM metrics](https://docs.vllm.ai/en/latest/design/metrics/)
 - [Berkeley L18](https://scalable-ai.eecs.berkeley.edu/S2026/assets/lecture_slides/lecture_18.pdf)
 
-## 10. Reuse KV when the causal prefix matches
+## 14. Reuse KV when the causal prefix matches
 
 **Section: Prefix caching**
 
@@ -93,7 +126,7 @@ Use P and A/B as symbolic token IDs, not words. For the ordinary causal Transfor
 
 - [vLLM prefix-cache design](https://docs.vllm.ai/en/stable/design/prefix_caching/)
 
-## 11. Share prefix blocks; allocate each unique suffix
+## 15. Share prefix blocks; allocate each unique suffix
 
 **Section: Prefix caching**
 
@@ -102,7 +135,7 @@ Step through the arrival of A, B, then C at the same replica. All three prompt K
 - [PagedAttention paper](https://arxiv.org/abs/2309.06180)
 - [vLLM prefix-cache design](https://docs.vllm.ai/en/stable/design/prefix_caching/)
 
-## 12. A finished request does not require deleting its KV
+## 16. A finished request does not require deleting its KV
 
 **Section: Prefix caching**
 
@@ -110,7 +143,7 @@ The reference count records how many current requests depend on a block. Finishi
 
 - [vLLM prefix-cache design](https://docs.vllm.ai/en/stable/design/prefix_caching/)
 
-## 13. Cache hit rate and KV occupancy answer different questions
+## 17. Cache hit rate and KV occupancy answer different questions
 
 **Section: Prefix caching**
 
@@ -119,7 +152,7 @@ The token-hit fraction answers what portion of the arriving prompt tokens used e
 - [PagedAttention paper](https://arxiv.org/abs/2309.06180)
 - [vLLM prefix-cache design](https://docs.vllm.ai/en/stable/design/prefix_caching/)
 
-## 14. What a prefix hit saves—and what remains
+## 18. What a prefix hit saves—and what remains
 
 **Section: Prefix caching**
 
@@ -127,7 +160,7 @@ The direct algorithmic saving is the repeated prefill computation for the reused
 
 - [vLLM prefix caching](https://docs.vllm.ai/en/latest/features/automatic_prefix_caching/)
 
-## 15. Question 1: more cache hits, worse p95 TTFT
+## 19. Question 1: more cache hits, worse p95 TTFT
 
 **Section: Question 1**
 
@@ -135,7 +168,7 @@ Give the group about one minute to reason before showing the solution. These val
 
 - [SGLang cache-aware routing](https://github.com/sgl-project/sglang/blob/main/sgl-model-gateway/src/policies/cache_aware.rs)
 
-## 16. Solution 1: saved work must outweigh additional waiting
+## 20. Solution 1: saved work must outweigh additional waiting
 
 **Section: Question 1 solution**
 
@@ -143,7 +176,7 @@ B is preferred under the stated estimates: a cache miss with a short wait can fi
 
 - [SGLang cache-aware routing](https://github.com/sgl-project/sglang/blob/main/sgl-model-gateway/src/policies/cache_aware.rs)
 
-## 17. Queues grow when arrivals outrun completions
+## 21. Queues grow when arrivals outrun completions
 
 **Section: Scheduling**
 
@@ -151,7 +184,7 @@ The numbers are a teaching construction, not a GPU benchmark. Count complete req
 
 - [Orca, OSDI 2022](https://www.usenix.org/conference/osdi22/presentation/yu)
 
-## 18. Three budgets constrain each scheduling round
+## 22. Three budgets constrain each scheduling round
 
 **Section: Scheduling**
 
@@ -160,7 +193,7 @@ Use the same four-GPU service, but zoom into the scheduler on one replica. The f
 - [vLLM: scheduler tuning](https://docs.vllm.ai/en/latest/configuration/optimization/)
 - [Orca, OSDI 2022](https://www.usenix.org/conference/osdi22/presentation/yu)
 
-## 19. Chunking controls how much a new prompt interrupts chat
+## 23. Chunking controls how much a new prompt interrupts chat
 
 **Section: Scheduling**
 
@@ -169,7 +202,7 @@ Click Next step three times. At the start, four existing chat requests are decod
 - [vLLM: scheduler tuning](https://docs.vllm.ai/en/latest/configuration/optimization/)
 - [Sarathi-Serve, OSDI 2024](https://arxiv.org/abs/2403.02310)
 
-## 20. Admission must consider future KV growth
+## 24. Admission must consider future KV growth
 
 **Section: Scheduling**
 
@@ -177,7 +210,7 @@ Active, retained and empty describe block-content states; retained blocks may al
 
 - [vLLM: scheduler tuning](https://docs.vllm.ai/en/latest/configuration/optimization/)
 
-## 21. Routing balances prefix reuse against local load
+## 25. Routing balances prefix reuse against local load
 
 **Section: Deployment**
 
@@ -185,7 +218,7 @@ These four boxes are the four one-GPU replicas from the case study. All hold the
 
 - [SGLang: cache-aware routing](https://github.com/sgl-project/sglang/blob/main/sgl-model-gateway/src/policies/cache_aware.rs)
 
-## 22. Compare shared and separate prefill/decode pools
+## 26. Compare shared and separate prefill/decode pools
 
 **Section: Deployment**
 
@@ -194,7 +227,7 @@ Week 2 introduced prefill–decode disaggregation. Here the new issue is resourc
 - [DistServe, OSDI 2024](https://www.usenix.org/conference/osdi24/presentation/zhong-yinmin)
 - [vLLM: disaggregated prefill](https://docs.vllm.ai/en/latest/features/disagg_prefill/)
 
-## 23. Question 2: Why do chat streams stall on long prompts?
+## 27. Question 2: Why do chat streams stall on long prompts?
 
 **Section: Questions**
 
@@ -203,7 +236,7 @@ This is an authored interview-style problem, not a question attributed to a part
 - [Sarathi-Serve, OSDI 2024](https://arxiv.org/abs/2403.02310)
 - [DistServe, OSDI 2024](https://www.usenix.org/conference/osdi24/presentation/zhong-yinmin)
 
-## 24. Solution 2: Attribute the delay before changing deployment
+## 28. Solution 2: Attribute the delay before changing deployment
 
 **Section: Questions**
 
@@ -212,7 +245,7 @@ First separate the duration of GPU kernels from the time between outputs seen by
 - [Sarathi-Serve, OSDI 2024](https://arxiv.org/abs/2403.02310)
 - [DistServe, OSDI 2024](https://www.usenix.org/conference/osdi24/presentation/zhong-yinmin)
 
-## 25. Design the experiment before choosing the winner
+## 29. Design the experiment before choosing the winner
 
 **Section: Benchmarking · 7 min**
 
@@ -220,7 +253,7 @@ Replay identical request content and arrival patterns, ideally in several random
 
 - [vLLM benchmark CLI](https://docs.vllm.ai/en/latest/cli/bench/serve/)
 
-## 26. Request rate and concurrency are different controls
+## 30. Request rate and concurrency are different controls
 
 **Section: Benchmarking · 7 min**
 
@@ -228,7 +261,7 @@ The left is a closed-loop client. Its achieved request rate drops automatically 
 
 - [vLLM benchmark CLI](https://docs.vllm.ai/en/latest/cli/bench/serve/)
 
-## 27. More throughput can still violate the service target
+## 31. More throughput can still violate the service target
 
 **Section: Benchmarking · 7 min**
 
@@ -237,7 +270,7 @@ These values are authored for interpretation, not fitted or measured. Assume sta
 - [DistServe §2–3](https://www.usenix.org/system/files/osdi24-zhong-yinmin.pdf)
 - [vLLM benchmark CLI](https://docs.vllm.ai/en/latest/cli/bench/serve/)
 
-## 28. Connect a bad user metric to an engine cause
+## 32. Connect a bad user metric to an engine cause
 
 **Section: Benchmarking · 7 min**
 
@@ -246,7 +279,7 @@ Each row is a hypothesis test, not a lookup table guaranteeing the cause. For ex
 - [vLLM metrics](https://docs.vllm.ai/en/latest/design/metrics/)
 - [DistServe §2–3](https://www.usenix.org/system/files/osdi24-zhong-yinmin.pdf)
 
-## 29. A reproducible serving experiment
+## 33. A reproducible serving experiment
 
 **Section: Benchmarking · 7 min**
 
@@ -255,7 +288,7 @@ Optional work after the meeting. The script requires a working endpoint and a co
 - [Companion lab](https://zhiweixx.github.io/llm-systems-study-group/week-4/lab.html)
 - [vLLM benchmark CLI](https://docs.vllm.ai/en/latest/cli/bench/serve/)
 
-## 30. Discussion: defend a serving decision with evidence
+## 34. Discussion: defend a serving decision with evidence
 
 **Section: Discussion · 15 min**
 

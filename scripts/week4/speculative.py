@@ -1,7 +1,7 @@
 """Six visual lessons on classical draft-model speculative decoding."""
 from .common import *
 SPEC=('Leviathan et al., §2–3','https://proceedings.mlr.press/v202/leviathan23a/leviathan23a.pdf')
-CHEN=('Chen et al., Algorithm 1','https://arxiv.org/html/2302.01318v1')
+CHEN=('Chen et al., Algorithm 2','https://arxiv.org/html/2302.01318v1')
 HF=('Transformers assisted decoding','https://github.com/huggingface/transformers/blob/main/src/transformers/generation/utils.py')
 VLLM=('vLLM speculative decoding','https://docs.vllm.ai/en/latest/features/speculative_decoding/')
 ACCEPT='#e5f1ed'
