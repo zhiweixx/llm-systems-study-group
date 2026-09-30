@@ -5,6 +5,7 @@ from .speculative import ACCEPT, REJECT, GREY
 EXACT=('Leviathan et al., App. A.1','https://proceedings.mlr.press/v202/leviathan23a/leviathan23a.pdf')
 CHEN_PROOF=('Chen et al., §4.2','https://arxiv.org/html/2302.01318v1#S4.SS2')
 ANALYSIS=('Leviathan et al., §3','https://proceedings.mlr.press/v202/leviathan23a/leviathan23a.pdf')
+SAMPLING=('Adapted from Leviathan et al., §2.3','https://proceedings.mlr.press/v202/leviathan23a/leviathan23a.pdf')
 
 
 def mathbox(x,y,w,h,formula,size=34):
@@ -36,6 +37,42 @@ def illustrative_speedup(gamma):
     return expected_tokens(.8,gamma)*10/(gamma+(10+gamma)+2)
 
 
+def sampling_quiz():
+    b=text(75,190,'At one fixed context, p is the target distribution and q is the draft distribution.',29)
+    b+=text(75,230,'We want the final output token Y to follow p. Consider this sampling procedure:',28)
+    b+=code(75,275,735,192,'x ~ q\nAccept x with probability min(1, p(x)/q(x)).\nIf accepted: output Y = x.\nIf rejected: draw Y from r.',25)
+    b+=table(865,272,660,['Token','Draft q','Target p'],[
+        ['sat','0.60','0.20'],['slept','0.20','0.50'],
+        ['ran','0.10','0.20'],['jumped','0.10','0.10'],
+    ],ratios=[.36,.32,.32],row_h=52,size=27)
+    b+=text(75,568,'1. Suppose r = p. Does Y follow p? Use the table to justify your answer.',29)
+    b+=text(75,625,'2. Find a replacement distribution r that produces the correct output distribution.',29)
+    b+=text(75,682,'3. Derive r for arbitrary p and q, and prove correctness. What if p = q?',29)
+    b+=takeaway('Account for both paths: accepted proposals and replacements after rejection.', 'Toy probabilities at a single context. p and q are normalized distributions over the same vocabulary.')
+    return slide('Quiz: What should we sample after a rejection?',b,
+        'Allow approximately 4–5 minutes before showing the numerical solution. This quiz adapts the algorithmic claim in Leviathan et al. Section 2.3 into a derivation exercise; the probabilities are an authored toy example. The target is p and the draft is q. Fix one history throughout: this is not compensation for tokens accepted at earlier positions. Ask participants to track the joint probability of proposing and accepting a token before choosing the replacement distribution. The deliberately incorrect branch r=p yields final probabilities (0.28,0.40,0.18,0.14). A correct replacement has probabilities (0,0.75,0.25,0). The next slide gives numerical accounting and the following slide proves the arbitrary-distribution result. Both distributions are normalized over the same vocabulary after any intended sampling transformations. A proposed token always has q(x)>0, so the acceptance ratio is evaluated only there. If p=q, rejection never occurs and the correction distribution is unnecessary.',[SAMPLING], 'Speculative decoding theory · quiz')
+
+
+def sampling_quiz_solution():
+    b=text(75,190,'For each token: P(propose and accept) = q × min(1, p/q) = min(p, q).',29)
+    b+=text(75,232,'Expected counts in 100 independent draws at the same context:',28,color=MUTED)
+    b+=table(75,266,850,['Token','Target','Accepted','Still needed'],[
+        ['sat','20','20','0'],['slept','50','20','30'],
+        ['ran','20','10','10'],['jumped','10','10','0'],
+    ],ratios=[.24,.23,.25,.28],row_h=57,size=27)
+    b+=line(968,266,968,552)
+    b+=text(1010,300,'40 draws are rejected.',29,700,color=BLUE)
+    b+=lines(1010,355,['If we resample from p:', '40 × 0.20 = 8 more sat tokens.'],25,gap=42)
+    b+=text(1010,461,'Final sat count: 20 + 8 = 28',26,700,color=WARM)
+    b+=text(1010,507,'The target requires only 20.',26)
+    b+=text(75,606,'The 40 replacements must supply 30 slept and 10 ran:',29,700,color=BLUE)
+    b+=text(75,655,'r = (0, 30/40, 10/40, 0) = (0, 0.75, 0.25, 0)',33)
+    b+=text(75,704,'Token order: sat, slept, ran, jumped. The next slide derives the general rule.',25,color=MUTED)
+    b+=takeaway('Accepted outputs + replacements must match the target distribution.', 'These are expected counts, not quotas maintained by the algorithm. The correction is computed from p and q.')
+    return slide('Quiz solution: why resampling from p is biased',b,
+        'The accepted probability vector is min(p,q)=(0.20,0.20,0.10,0.10). Its total is 0.60, so rejection occurs with probability Z=0.40. If the replacement is sampled from p, the emitted vector is min(p,q)+Z*p=(0.28,0.40,0.18,0.14), which differs from p. This is a mixture over alternative outcomes at one fixed history, not a correction for earlier accepted tokens in a sequence. Expected counts across 100 independent draws make the accounting visible; an actual run need not have these exact counts. To reach the target counts (20,50,20,10), the accepted counts (20,20,10,10) need an additional (0,30,10,0). Normalize that missing mass over the 40 rejected draws to obtain r=(0,0.75,0.25,0). Then min(p,q)+Z*r=p for every token. For arbitrary distributions, r(x)=max(p(x)-q(x),0)/Z with Z=sum_y max(p(y)-q(y),0). If p=q then Z=0, every proposal is accepted and the correction branch is never evaluated. The following slide presents the full proof and explains sequence-level exactness.',[SAMPLING,EXACT], 'Speculative decoding theory · quiz solution')
+
+
 def exactness():
     b=text(75,187,'Fix one context. p(x) is the target probability; q(x) is the draft probability.',29)
     b+=text(75,224,'Both distributions use the same vocabulary. [z]₊ means max(z, 0).',26,color=MUTED)
@@ -50,7 +87,7 @@ def exactness():
     b+=text(75,716,'Y is the emitted token. If Z = 0, every proposal passes and no correction is needed.',26,color=MUTED)
     b+=takeaway('Repeating this rule at each context preserves the target sequence distribution.', 'This is distributional equality. The same random seed need not produce the same sample sequence.')
     return slide('Why speculative sampling is exact',b,
-        'This proof formalizes the two-token probability example. Fix a history and let p and q be normalized target and proposal distributions over a common vocabulary, after any intended sampling transformations. Propose X from q and accept with probability min(1,p(X)/q(X)). For any vocabulary item x, the joint probability of proposing and accepting x is min(p(x),q(x)). Its sum is the total acceptance probability. Since p and q each sum to one, the omitted target mass Z=sum_x max(p(x)-q(x),0) equals the rejection probability 1-sum_x min(p(x),q(x)). On rejection draw Y from r(x)=max(p(x)-q(x),0)/Z. This contributes unconditional mass Z*r(x), exactly filling the missing target mass. Thus min(p,q)+max(p-q,0)=p pointwise. When q(x)=0 the algorithm cannot propose x, so it never evaluates that ratio for such an x; positive target mass there comes through the residual. When Z=0, the rejection branch has zero probability. At successive positions, use the distributions for the actual accepted history and discard the invalid suffix after a rejection. This yields the target autoregressive joint distribution by the chain rule. The proof concerns the ideal probability algorithm; floating-point implementations can differ numerically. Chen uses the opposite p/q naming; this deck consistently uses p for target and q for draft.',[EXACT,CHEN_PROOF], 'Speculative decoding theory · 8–10 min')
+        'This proof completes part 3 of the quiz and generalizes its numerical solution. Fix a history and let p and q be normalized target and proposal distributions over a common vocabulary, after any intended sampling transformations. Propose X from q and accept with probability min(1,p(X)/q(X)). For any vocabulary item x, the joint probability of proposing and accepting x is min(p(x),q(x)). Its sum is the total acceptance probability. Since p and q each sum to one, the omitted target mass Z=sum_x max(p(x)-q(x),0) equals the rejection probability 1-sum_x min(p(x),q(x)). On rejection draw Y from r(x)=max(p(x)-q(x),0)/Z. This contributes unconditional mass Z*r(x), exactly filling the missing target mass. Thus min(p,q)+max(p-q,0)=p pointwise. When q(x)=0 the algorithm cannot propose x, so it never evaluates that ratio for such an x; positive target mass there comes through the residual. When Z=0, the rejection branch has zero probability. At successive positions, use the distributions for the actual accepted history and discard the invalid suffix after a rejection. This yields the target autoregressive joint distribution by the chain rule. The proof concerns the ideal probability algorithm; floating-point implementations can differ numerically. Chen uses the opposite p/q naming; this deck consistently uses p for target and q for draft.',[EXACT,CHEN_PROOF], 'Speculative decoding theory · 8–10 min')
 
 
 def overlap():
@@ -126,4 +163,4 @@ def speedup():
 
 
 def get_slides():
-    return [exactness(),overlap(),progress(),speedup()]
+    return [sampling_quiz(),sampling_quiz_solution(),exactness(),overlap(),progress(),speedup()]

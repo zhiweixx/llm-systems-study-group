@@ -12,11 +12,14 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'.build/week4-qa');
  await page.goto('file://'+path.join(root,'week-4-serving.html'));
  const settle=()=>page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));await settle();
  const slides=await page.locator('.slide').evaluateAll(ss=>ss.map(s=>({id:s.id,title:s.dataset.title,section:s.dataset.section})));
- assert.equal(slides.length,34);
- assert.ok(slides.slice(1,11).every(s=>s.section.startsWith('Speculative decoding')));
- assert.ok(slides.slice(7,11).every(s=>s.section.startsWith('Speculative decoding theory')));
- assert.ok(slides[18].title.startsWith('Question 1'));
- assert.ok(slides[26].title.startsWith('Question 2'));
+ assert.equal(slides.length,36);
+ assert.ok(slides.slice(1,13).every(s=>s.section.startsWith('Speculative decoding')));
+ assert.ok(slides.slice(7,13).every(s=>s.section.startsWith('Speculative decoding theory')));
+ assert.ok(slides[7].title.startsWith('Quiz:'));
+ assert.ok(slides[8].title.startsWith('Quiz solution:'));
+ assert.ok(slides[9].title.startsWith('Why speculative sampling is exact'));
+ assert.ok(slides[20].title.startsWith('Question 1'));
+ assert.ok(slides[28].title.startsWith('Question 2'));
  const inspect=async label=>{
   const result=await page.locator('.slide:not([hidden])>svg').evaluate(svg=>{
    const visible=e=>{const r=e.getBoundingClientRect();return r.width>0&&r.height>0&&getComputedStyle(e).visibility!=='hidden';};
