@@ -11,32 +11,27 @@ def get_slides():
         x=75+i*500
         body+=line(x,486,x+440,486)+text(x,536,a,32,700,color=BLUE)+text(x,579,b,29)
     body+=text(75,682,'Speculative decoding: the algorithm, a sampling quiz, and correctness and performance theory.',28,color=MUTED)
-    body+=takeaway('Goal: reduce generation time while meeting explicit service latency targets.', '34 slides · about 50–55 min of teaching material, followed by discussion.')
+    body+=takeaway('Goal: reduce generation time while meeting explicit service latency targets.', '33 slides · about 50–55 min of teaching material, followed by discussion.')
     out=[slide('Week 4 · From model execution to an online service',body,
-        'Open with the two-slide speculative-decoding introduction: the draft–verify mechanism followed by the exact stochastic sampling algorithm. Allow 4–5 minutes for slides 2–3, about 4 minutes for KV continuation and the timing comparison on slides 4–5, and about 3 minutes for the multiple-choice sampling quiz and its solution on slides 6–7. Slides 8–11 develop correctness and performance theory (8–10 minutes): exact sampling, acceptance as distribution overlap, expected tokens per round, and expected speedup. Slides 12–13 establish the four-GPU serving case; 14–20 teach prefix reuse; 21–28 cover scheduling, routing and deployment; 29–33 cover measurement; 34 begins discussion. The full sequence is approximately 50–55 minutes plus 15 minutes of discussion, not a rehearsed duration. Choose later sections if retaining a 50-minute meeting. Numerical cases and diagrams are authored teaching examples, not GPU measurements.',section='Opening')]
-    body=text(75,202,'One case throughout: an 8B chat service on four GPUs',34,700)
-    body+=text(75,246,'Assume the model fits on one GPU; start with four independent replicas.',28)
-    body+=label_box(75,328,240,92,'Requests',size=32)+arrow(315,374,405,374)+label_box(405,328,260,92,'Router',size=32)
+        'Open with the two-slide speculative-decoding introduction: the draft–verify mechanism followed by the exact stochastic sampling algorithm. Allow 4–5 minutes for slides 2–3, about 4 minutes for KV continuation and the timing comparison on slides 4–5, and about 3 minutes for the multiple-choice sampling quiz and its solution on slides 6–7. Slides 8–11 develop correctness and performance theory (8–10 minutes): exact sampling, acceptance as distribution overlap, expected tokens per round, and expected speedup. Slide 12 connects the four-GPU serving case to the request lifecycle; 13–19 teach prefix reuse; 20–27 cover scheduling, routing and deployment; 28–32 cover measurement; 33 begins discussion. The full sequence is approximately 50–55 minutes plus 15 minutes of discussion, not a rehearsed duration. Choose later sections if retaining a 50-minute meeting. Numerical cases and diagrams are authored teaching examples, not GPU measurements.',section='Opening')]
+    body=text(75,199,'Example: four GPUs, each hosting a complete 8B model; short chats and long prompts.',30)
+    body+=label_box(75,291,185,78,'Requests',size=29)+arrow(260,330,300,330)
+    body+=rect(300,285,210,90,PALE)+text(405,319,'Router',28,700,anchor='middle')
+    body+=text(405,352,'chooses a replica',22,anchor='middle')+arrow(510,330,555,330)
+    body+=line(555,258,555,423,BLUE,2)
     for i in range(4):
-        y=285+i*91
-        body+=label_box(900,y,625,69,f'GPU {i}  ·  queue + engine + local KV cache',size=25)
-        body+=arrow(665,374,835,374) if i==0 else ''
-        body+=line(835,320,835,594) if i==0 else ''
-        body+=arrow(835,y+35,900,y+35)
-    body+=lines(75,495,['Workload: short chats + long documents', 'Repeated system prompts; varied user suffixes'],27,gap=42)
-    body+=line(75,640,1525,640)+text(75,684,'Example targets: ≥95% pass both TTFT ≤1 s and per-request TPOT ≤50 ms.',29,700,color=BLUE)
-    body+=takeaway('The resource budget stays fixed when we compare serving policies.', 'Targets are illustrative. We also inspect ITL tails so a mean cannot hide streaming stalls.')
-    out.append(slide('The case: four GPUs, variable prompts, latency targets',body,
-        'Use one model and precision across all experiments. A replica is a complete model instance here, not a tensor-parallel shard. Each replica owns its own queue and KV cache; the baseline does not share cache storage across GPUs. Workload lengths are not fixed in the motivating case; controlled experiments will isolate them. TTFT is client time to first output token. TPOT is the per-request mean time for subsequent output tokens. Our service target means at least 95% of offered requests successfully satisfy BOTH bounds; errors and timeouts count as failures. ITL measures individual gaps and can reveal stalls that a request average hides. The specific thresholds are teaching assumptions, not measured limits or recommendations for a particular product.',[METRICS], 'Setup · 4 min'))
-    body=text(75,199,'A request can wait before and between GPU operations.',32,700)
-    boxes=[(75,270,240,'Route + queue'),(350,270,300,'Prefill uncached input'),(685,270,220,'First token'),(940,270,585,'Decode → stream → repeat')]
-    for x,y,w,label in boxes:body+=label_box(x,y,w,84,label,size=26)
-    for x1,x2 in [(315,350),(650,685),(905,940)]:body+=arrow(x1,312,x2,312)
-    body+=line(75,401,905,401,BLUE,3)+text(490,443,'TTFT: arrival → first token',30,700,color=BLUE,anchor='middle')
-    body+=line(940,401,1525,401,TEAL,3)+text(1230,443,'ITL: gap between tokens',29,700,color=TEAL,anchor='middle')
-    body+=lines(75,533,['Router: chooses the replica.', 'Scheduler: chooses the work in each engine iteration.', 'KV manager: tracks active, reusable, and reclaimable blocks.'],29,gap=47)
-    body+=text(75,696,'Completion: release the request’s references; retain reusable prefix blocks if policy allows.',27)
-    body+=takeaway('Measure the user timeline and the engine timeline together.', 'TPOT is a request’s mean token gap; ITL measures individual gaps. Both include client-visible waits.')
+        y=235+i*55
+        body+=arrow(555,y+23,600,y+23)
+        body+=label_box(600,y,925,46,f'GPU {i}  ·  complete model + queue + local KV cache',size=25)
+    body+=line(75,465,1525,465)+text(75,502,'One request’s timeline',28,700,color=BLUE)
+    boxes=[(75,531,240,'Route + queue'),(350,531,300,'Prefill uncached input'),(685,531,220,'First token'),(940,531,585,'Decode → stream → repeat')]
+    for x,y,w,label in boxes:body+=label_box(x,y,w,64,label,size=25)
+    for x1,x2 in [(315,350),(650,685),(905,940)]:body+=arrow(x1,563,x2,563)
+    body+=line(75,615,905,615,BLUE,3)+text(490,650,'TTFT: arrival → first token',28,700,color=BLUE,anchor='middle')
+    body+=line(940,615,1525,615,TEAL,3)+text(1230,650,'ITL: gap between tokens',28,700,color=TEAL,anchor='middle')
+    body+=text(75,705,'Scheduler: chooses each iteration’s work.',26)
+    body+=text(800,705,'KV manager: allocates and reuses cache blocks.',26)
+    body+=takeaway('With the same four GPUs, routing, caching and scheduling change response time.', 'TPOT is a request’s mean token gap; ITL measures individual gaps. Both include client-visible waits.')
     out.append(slide('Follow one request from arrival to completion',body,
-        'This is a logical sequence, not a scale drawing or a promise of one GPU kernel per box. Prefill may be split across engine iterations and interleaved with other requests. Prefix caching can skip a portion of input computation, but routing, queuing, uncached work, and the output-generation path remain. The first token is produced using the prompt processing result; subsequent tokens are generated by decode steps. For n>1 output tokens, client mean TPOT=(last-token time−first-token time)/(n−1), with streaming event/token conventions stated by the benchmark. Individual ITL samples need not equal the mean. Network buffering can change observed streaming gaps. Define timestamp boundaries before comparing server and client metrics.',[METRICS,BERKELEY], 'Setup · 4 min'))
+        'Transition from accelerating one generation to serving many concurrent requests under a fixed GPU budget. Assume one 8B model fits on each GPU at the chosen precision. A replica is a complete model instance, not a tensor-parallel shard; the router selects ONE of the four replicas for a request. Each replica owns its own queue and local KV cache, with no cross-GPU cache sharing in this baseline. Short chats and long documents may reuse system prompts but have different user suffixes. Keep the model, precision and hardware fixed when comparing serving policies. The lower diagram follows one request through the selected engine, including its earlier routing time. This is a logical sequence, not a scale drawing or a promise of one GPU kernel per box. Prefill may be split across engine iterations and interleaved with other requests. Prefix caching can skip a portion of input computation, but routing, queuing, uncached work, and the output-generation path remain. The first token is produced using the prompt processing result; subsequent tokens are generated by decode steps. On completion, release the request’s references and retain reusable prefix blocks if policy allows. For n>1 output tokens, client mean TPOT=(last-token time−first-token time)/(n−1), with streaming event/token conventions stated by the benchmark. Individual ITL samples need not equal the mean. Network buffering can change observed streaming gaps. Define timestamp boundaries before comparing server and client metrics. Later benchmarking slides introduce illustrative latency thresholds; these are not hardware constants.',[METRICS,BERKELEY], 'Setup · 3 min'))
     return out

@@ -15,7 +15,7 @@ def all_slides():
     from week4.speculative_theory import get_slides as theory
     opening = core()
     slides = opening[:1]+speculative()+theory()+opening[1:]+prefix()+scheduling()+benchmark()
-    assert len(slides) == 34
+    assert len(slides) == 33
     return slides
 
 def build():
@@ -39,8 +39,8 @@ def build():
     '''
     parts=[]
     notes=['# Week 4 — Speculative decoding and LLM serving','',
-      '34 slides, beginning with a two-slide introduction to speculative decoding and its exact sampling algorithm (4–5 minutes), KV continuation and a timing comparison (about 4 minutes), a multiple-choice sampling quiz and its solution (about 3 minutes), and four theory slides (8–10 minutes). The full teaching sequence is approximately 50–55 minutes, plus 15 minutes of discussion. These are planning estimates; choose sections for a 50-minute meeting.','',
-      'Route: 1 opening; 2–3 speculative decoding and exact sampling; 4–5 KV continuation and cost; 6–7 multiple-choice quiz and solution; 8–11 correctness and performance theory; 12–13 serving case and lifecycle; 14–20 prefix reuse and Question 1; 21–28 scheduling, routing, deployment and Question 2; 29–33 measurement; 34 discussion. Questions have immediate solution slides.','',
+      '33 slides, beginning with a two-slide introduction to speculative decoding and its exact sampling algorithm (4–5 minutes), KV continuation and a timing comparison (about 4 minutes), a multiple-choice sampling quiz and its solution (about 3 minutes), and four theory slides (8–10 minutes). The full teaching sequence is approximately 50–55 minutes, plus 15 minutes of discussion. These are planning estimates; choose sections for a 50-minute meeting.','',
+      'Route: 1 opening; 2–3 speculative decoding and exact sampling; 4–5 KV continuation and cost; 6–7 multiple-choice quiz and solution; 8–11 correctness and performance theory; 12 serving case and request lifecycle; 13–19 prefix reuse and Question 1; 20–27 scheduling, routing, deployment and Question 2; 28–32 measurement; 33 discussion. Questions have immediate solution slides.','',
       'All diagrams and numerical cases are authored teaching examples, not published GPU measurements or verified company interview questions. Primary sources appear on the slides and below. Documentation checked September 28, 2026; benchmark flags should be checked against the installed vLLM version.','',
       'The [companion lab](https://zhiweixx.github.io/llm-systems-study-group/week-4/lab.html) includes a dry-run-first request-rate sweep. No GPU benchmark was run to produce these slides. The HTML is self-contained and works offline; reference links need internet.','']
     for i,s in enumerate(slides,1):

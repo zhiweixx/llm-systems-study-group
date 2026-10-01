@@ -1,8 +1,8 @@
 # Week 4 — Speculative decoding and LLM serving
 
-34 slides, beginning with a two-slide introduction to speculative decoding and its exact sampling algorithm (4–5 minutes), KV continuation and a timing comparison (about 4 minutes), a multiple-choice sampling quiz and its solution (about 3 minutes), and four theory slides (8–10 minutes). The full teaching sequence is approximately 50–55 minutes, plus 15 minutes of discussion. These are planning estimates; choose sections for a 50-minute meeting.
+33 slides, beginning with a two-slide introduction to speculative decoding and its exact sampling algorithm (4–5 minutes), KV continuation and a timing comparison (about 4 minutes), a multiple-choice sampling quiz and its solution (about 3 minutes), and four theory slides (8–10 minutes). The full teaching sequence is approximately 50–55 minutes, plus 15 minutes of discussion. These are planning estimates; choose sections for a 50-minute meeting.
 
-Route: 1 opening; 2–3 speculative decoding and exact sampling; 4–5 KV continuation and cost; 6–7 multiple-choice quiz and solution; 8–11 correctness and performance theory; 12–13 serving case and lifecycle; 14–20 prefix reuse and Question 1; 21–28 scheduling, routing, deployment and Question 2; 29–33 measurement; 34 discussion. Questions have immediate solution slides.
+Route: 1 opening; 2–3 speculative decoding and exact sampling; 4–5 KV continuation and cost; 6–7 multiple-choice quiz and solution; 8–11 correctness and performance theory; 12 serving case and request lifecycle; 13–19 prefix reuse and Question 1; 20–27 scheduling, routing, deployment and Question 2; 28–32 measurement; 33 discussion. Questions have immediate solution slides.
 
 All diagrams and numerical cases are authored teaching examples, not published GPU measurements or verified company interview questions. Primary sources appear on the slides and below. Documentation checked September 28, 2026; benchmark flags should be checked against the installed vLLM version.
 
@@ -12,7 +12,7 @@ The [companion lab](https://zhiweixx.github.io/llm-systems-study-group/week-4/la
 
 **Section: Opening**
 
-Open with the two-slide speculative-decoding introduction: the draft–verify mechanism followed by the exact stochastic sampling algorithm. Allow 4–5 minutes for slides 2–3, about 4 minutes for KV continuation and the timing comparison on slides 4–5, and about 3 minutes for the multiple-choice sampling quiz and its solution on slides 6–7. Slides 8–11 develop correctness and performance theory (8–10 minutes): exact sampling, acceptance as distribution overlap, expected tokens per round, and expected speedup. Slides 12–13 establish the four-GPU serving case; 14–20 teach prefix reuse; 21–28 cover scheduling, routing and deployment; 29–33 cover measurement; 34 begins discussion. The full sequence is approximately 50–55 minutes plus 15 minutes of discussion, not a rehearsed duration. Choose later sections if retaining a 50-minute meeting. Numerical cases and diagrams are authored teaching examples, not GPU measurements.
+Open with the two-slide speculative-decoding introduction: the draft–verify mechanism followed by the exact stochastic sampling algorithm. Allow 4–5 minutes for slides 2–3, about 4 minutes for KV continuation and the timing comparison on slides 4–5, and about 3 minutes for the multiple-choice sampling quiz and its solution on slides 6–7. Slides 8–11 develop correctness and performance theory (8–10 minutes): exact sampling, acceptance as distribution overlap, expected tokens per round, and expected speedup. Slide 12 connects the four-GPU serving case to the request lifecycle; 13–19 teach prefix reuse; 20–27 cover scheduling, routing and deployment; 28–32 cover measurement; 33 begins discussion. The full sequence is approximately 50–55 minutes plus 15 minutes of discussion, not a rehearsed duration. Choose later sections if retaining a 50-minute meeting. Numerical cases and diagrams are authored teaching examples, not GPU measurements.
 
 
 ## 2. Speculative decoding: draft, verify, commit
@@ -101,24 +101,16 @@ Use a stationary fixed-workload approximation and enough generation rounds for a
 
 - [Leviathan et al., §3](https://proceedings.mlr.press/v202/leviathan23a/leviathan23a.pdf)
 
-## 12. The case: four GPUs, variable prompts, latency targets
+## 12. Follow one request from arrival to completion
 
-**Section: Setup · 4 min**
+**Section: Setup · 3 min**
 
-Use one model and precision across all experiments. A replica is a complete model instance here, not a tensor-parallel shard. Each replica owns its own queue and KV cache; the baseline does not share cache storage across GPUs. Workload lengths are not fixed in the motivating case; controlled experiments will isolate them. TTFT is client time to first output token. TPOT is the per-request mean time for subsequent output tokens. Our service target means at least 95% of offered requests successfully satisfy BOTH bounds; errors and timeouts count as failures. ITL measures individual gaps and can reveal stalls that a request average hides. The specific thresholds are teaching assumptions, not measured limits or recommendations for a particular product.
-
-- [vLLM metrics](https://docs.vllm.ai/en/latest/design/metrics/)
-
-## 13. Follow one request from arrival to completion
-
-**Section: Setup · 4 min**
-
-This is a logical sequence, not a scale drawing or a promise of one GPU kernel per box. Prefill may be split across engine iterations and interleaved with other requests. Prefix caching can skip a portion of input computation, but routing, queuing, uncached work, and the output-generation path remain. The first token is produced using the prompt processing result; subsequent tokens are generated by decode steps. For n>1 output tokens, client mean TPOT=(last-token time−first-token time)/(n−1), with streaming event/token conventions stated by the benchmark. Individual ITL samples need not equal the mean. Network buffering can change observed streaming gaps. Define timestamp boundaries before comparing server and client metrics.
+Transition from accelerating one generation to serving many concurrent requests under a fixed GPU budget. Assume one 8B model fits on each GPU at the chosen precision. A replica is a complete model instance, not a tensor-parallel shard; the router selects ONE of the four replicas for a request. Each replica owns its own queue and local KV cache, with no cross-GPU cache sharing in this baseline. Short chats and long documents may reuse system prompts but have different user suffixes. Keep the model, precision and hardware fixed when comparing serving policies. The lower diagram follows one request through the selected engine, including its earlier routing time. This is a logical sequence, not a scale drawing or a promise of one GPU kernel per box. Prefill may be split across engine iterations and interleaved with other requests. Prefix caching can skip a portion of input computation, but routing, queuing, uncached work, and the output-generation path remain. The first token is produced using the prompt processing result; subsequent tokens are generated by decode steps. On completion, release the request’s references and retain reusable prefix blocks if policy allows. For n>1 output tokens, client mean TPOT=(last-token time−first-token time)/(n−1), with streaming event/token conventions stated by the benchmark. Individual ITL samples need not equal the mean. Network buffering can change observed streaming gaps. Define timestamp boundaries before comparing server and client metrics. Later benchmarking slides introduce illustrative latency thresholds; these are not hardware constants.
 
 - [vLLM metrics](https://docs.vllm.ai/en/latest/design/metrics/)
 - [Berkeley L18](https://scalable-ai.eecs.berkeley.edu/S2026/assets/lecture_slides/lecture_18.pdf)
 
-## 14. Reuse KV when the causal prefix matches
+## 13. Reuse KV when the causal prefix matches
 
 **Section: Prefix caching**
 
@@ -126,7 +118,7 @@ Use P and A/B as symbolic token IDs, not words. For the ordinary causal Transfor
 
 - [vLLM prefix-cache design](https://docs.vllm.ai/en/stable/design/prefix_caching/)
 
-## 15. Share prefix blocks; allocate each unique suffix
+## 14. Share prefix blocks; allocate each unique suffix
 
 **Section: Prefix caching**
 
@@ -135,7 +127,7 @@ Step through the arrival of A, B, then C at the same replica. All three prompt K
 - [PagedAttention paper](https://arxiv.org/abs/2309.06180)
 - [vLLM prefix-cache design](https://docs.vllm.ai/en/stable/design/prefix_caching/)
 
-## 16. A finished request does not require deleting its KV
+## 15. A finished request does not require deleting its KV
 
 **Section: Prefix caching**
 
@@ -143,7 +135,7 @@ The reference count records how many current requests depend on a block. Finishi
 
 - [vLLM prefix-cache design](https://docs.vllm.ai/en/stable/design/prefix_caching/)
 
-## 17. Cache hit rate and KV occupancy answer different questions
+## 16. Cache hit rate and KV occupancy answer different questions
 
 **Section: Prefix caching**
 
@@ -152,7 +144,7 @@ The token-hit fraction answers what portion of the arriving prompt tokens used e
 - [PagedAttention paper](https://arxiv.org/abs/2309.06180)
 - [vLLM prefix-cache design](https://docs.vllm.ai/en/stable/design/prefix_caching/)
 
-## 18. What a prefix hit saves—and what remains
+## 17. What a prefix hit saves—and what remains
 
 **Section: Prefix caching**
 
@@ -160,7 +152,7 @@ The direct algorithmic saving is the repeated prefill computation for the reused
 
 - [vLLM prefix caching](https://docs.vllm.ai/en/latest/features/automatic_prefix_caching/)
 
-## 19. Question 1: more cache hits, worse p95 TTFT
+## 18. Question 1: more cache hits, worse p95 TTFT
 
 **Section: Question 1**
 
@@ -168,7 +160,7 @@ Give the group about one minute to reason before showing the solution. These val
 
 - [SGLang cache-aware routing](https://github.com/sgl-project/sglang/blob/main/sgl-model-gateway/src/policies/cache_aware.rs)
 
-## 20. Solution 1: saved work must outweigh additional waiting
+## 19. Solution 1: saved work must outweigh additional waiting
 
 **Section: Question 1 solution**
 
@@ -176,7 +168,7 @@ B is preferred under the stated estimates: a cache miss with a short wait can fi
 
 - [SGLang cache-aware routing](https://github.com/sgl-project/sglang/blob/main/sgl-model-gateway/src/policies/cache_aware.rs)
 
-## 21. Queues grow when arrivals outrun completions
+## 20. Queues grow when arrivals outrun completions
 
 **Section: Scheduling**
 
@@ -184,7 +176,7 @@ The numbers are a teaching construction, not a GPU benchmark. Count complete req
 
 - [Orca, OSDI 2022](https://www.usenix.org/conference/osdi22/presentation/yu)
 
-## 22. Three budgets constrain each scheduling round
+## 21. Three budgets constrain each scheduling round
 
 **Section: Scheduling**
 
@@ -193,7 +185,7 @@ Use the same four-GPU service, but zoom into the scheduler on one replica. The f
 - [vLLM: scheduler tuning](https://docs.vllm.ai/en/latest/configuration/optimization/)
 - [Orca, OSDI 2022](https://www.usenix.org/conference/osdi22/presentation/yu)
 
-## 23. Chunking controls how much a new prompt interrupts chat
+## 22. Chunking controls how much a new prompt interrupts chat
 
 **Section: Scheduling**
 
@@ -202,7 +194,7 @@ Click Next step three times. At the start, four existing chat requests are decod
 - [vLLM: scheduler tuning](https://docs.vllm.ai/en/latest/configuration/optimization/)
 - [Sarathi-Serve, OSDI 2024](https://arxiv.org/abs/2403.02310)
 
-## 24. Admission must consider future KV growth
+## 23. Admission must consider future KV growth
 
 **Section: Scheduling**
 
@@ -210,7 +202,7 @@ Active, retained and empty describe block-content states; retained blocks may al
 
 - [vLLM: scheduler tuning](https://docs.vllm.ai/en/latest/configuration/optimization/)
 
-## 25. Routing balances prefix reuse against local load
+## 24. Routing balances prefix reuse against local load
 
 **Section: Deployment**
 
@@ -218,7 +210,7 @@ These four boxes are the four one-GPU replicas from the case study. All hold the
 
 - [SGLang: cache-aware routing](https://github.com/sgl-project/sglang/blob/main/sgl-model-gateway/src/policies/cache_aware.rs)
 
-## 26. Compare shared and separate prefill/decode pools
+## 25. Compare shared and separate prefill/decode pools
 
 **Section: Deployment**
 
@@ -227,7 +219,7 @@ Week 2 introduced prefill–decode disaggregation. Here the new issue is resourc
 - [DistServe, OSDI 2024](https://www.usenix.org/conference/osdi24/presentation/zhong-yinmin)
 - [vLLM: disaggregated prefill](https://docs.vllm.ai/en/latest/features/disagg_prefill/)
 
-## 27. Question 2: Why do chat streams stall on long prompts?
+## 26. Question 2: Why do chat streams stall on long prompts?
 
 **Section: Questions**
 
@@ -236,7 +228,7 @@ This is an authored interview-style problem, not a question attributed to a part
 - [Sarathi-Serve, OSDI 2024](https://arxiv.org/abs/2403.02310)
 - [DistServe, OSDI 2024](https://www.usenix.org/conference/osdi24/presentation/zhong-yinmin)
 
-## 28. Solution 2: Attribute the delay before changing deployment
+## 27. Solution 2: Attribute the delay before changing deployment
 
 **Section: Questions**
 
@@ -245,7 +237,7 @@ First separate the duration of GPU kernels from the time between outputs seen by
 - [Sarathi-Serve, OSDI 2024](https://arxiv.org/abs/2403.02310)
 - [DistServe, OSDI 2024](https://www.usenix.org/conference/osdi24/presentation/zhong-yinmin)
 
-## 29. Design the experiment before choosing the winner
+## 28. Design the experiment before choosing the winner
 
 **Section: Benchmarking · 7 min**
 
@@ -253,7 +245,7 @@ Replay identical request content and arrival patterns, ideally in several random
 
 - [vLLM benchmark CLI](https://docs.vllm.ai/en/latest/cli/bench/serve/)
 
-## 30. Request rate and concurrency are different controls
+## 29. Request rate and concurrency are different controls
 
 **Section: Benchmarking · 7 min**
 
@@ -261,7 +253,7 @@ The left is a closed-loop client. Its achieved request rate drops automatically 
 
 - [vLLM benchmark CLI](https://docs.vllm.ai/en/latest/cli/bench/serve/)
 
-## 31. More throughput can still violate the service target
+## 30. More throughput can still violate the service target
 
 **Section: Benchmarking · 7 min**
 
@@ -270,7 +262,7 @@ These values are authored for interpretation, not fitted or measured. Assume sta
 - [DistServe §2–3](https://www.usenix.org/system/files/osdi24-zhong-yinmin.pdf)
 - [vLLM benchmark CLI](https://docs.vllm.ai/en/latest/cli/bench/serve/)
 
-## 32. Connect a bad user metric to an engine cause
+## 31. Connect a bad user metric to an engine cause
 
 **Section: Benchmarking · 7 min**
 
@@ -279,7 +271,7 @@ Each row is a hypothesis test, not a lookup table guaranteeing the cause. For ex
 - [vLLM metrics](https://docs.vllm.ai/en/latest/design/metrics/)
 - [DistServe §2–3](https://www.usenix.org/system/files/osdi24-zhong-yinmin.pdf)
 
-## 33. A reproducible serving experiment
+## 32. A reproducible serving experiment
 
 **Section: Benchmarking · 7 min**
 
@@ -288,7 +280,7 @@ Optional work after the meeting. The script requires a working endpoint and a co
 - [Companion lab](https://zhiweixx.github.io/llm-systems-study-group/week-4/lab.html)
 - [vLLM benchmark CLI](https://docs.vllm.ai/en/latest/cli/bench/serve/)
 
-## 34. Discussion: defend a serving decision with evidence
+## 33. Discussion: defend a serving decision with evidence
 
 **Section: Discussion · 15 min**
 
