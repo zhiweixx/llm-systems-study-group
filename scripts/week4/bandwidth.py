@@ -1,121 +1,96 @@
-"""Source-labelled bandwidth comparison; original editable logarithmic chart."""
-from math import log10, sqrt
+"""Editable memory pyramid and a two-GPU bandwidth reference table."""
 from .common import *
 
 SOURCES = [
     ('H100 specs', 'https://www.nvidia.com/en-us/data-center/h100/'),
-    ('H200 specs', 'https://www.nvidia.com/en-us/data-center/h200/'),
     ('DGX B200', 'https://docs.nvidia.com/dgx/dgxb200-user-guide/introduction-to-dgxb200.html'),
     ('B200 HBM', 'https://www.nvidia.com/en-us/data-center/dgx-b200/'),
     ('DGX Hopper', 'https://docs.nvidia.com/dgx/dgxh100-user-guide/introduction-to-dgxh100.html'),
     ('FA3 Table 1', 'https://tridao.me/publications/flash3/flash3.pdf'),
     ('FA4', 'https://tridao.me/blog/2026/flash4/'),
     ('B200 L2 test', 'https://chipsandcheese.com/p/nvidias-b200-keeping-the-cuda-juggernaut'),
-    ('L1 test', 'https://github.com/RRZE-HPC/gpu-benches'),
 ]
 
 
 def get_slide():
-    # Values are in decimal TB/s. Keep ranges and missing values explicit.
-    rows = [
-        ('Shared memory (SRAM)', 'All SMs summed',
-         [(31, '≈31', True), (31, '≈31*', True), ((35, 38), '≈35–38*', True)]),
-        ('L2 cache (SRAM)', 'Across the GPU',
-         [(12, '≈12 (paper)', True), (None, 'H200: not verified', True),
-          ((16.8, 21), '16.8–21 (test)', True)]),
-        ('HBM', 'Per GPU',
-         [(3.35, '3.35', False), (4.8, '4.8', False), (8, 'up to 8', False)]),
-        ('NVLink', 'Per GPU, one-way',
-         [(.45, '0.45', False), (.45, '0.45', False), (.9, '0.90', False)]),
-        ('InfiniBand', 'Per 400 Gb/s NIC, one-way',
-         [(.05, '0.05', False), (.05, '0.05', False), (.05, '0.05', False)]),
+    body = text(75, 196, 'Memory inside one GPU', 30, 700, color=BLUE)
+    body += text(840, 196, 'Bandwidth: H100 SXM and DGX B200', 30, 700, color=BLUE)
+
+    # A schematic pyramid like the user's reference; width does not encode data.
+    levels = [
+        ('Registers', 'Per-thread working values', '#ffffff'),
+        ('L1 + shared memory', 'Local to each SM (SRAM)', '#f3f6f8'),
+        ('L2 cache', 'Shared across SMs (SRAM)', '#e6edf2'),
+        ('HBM', 'GPU main memory (DRAM)', '#d8e4ed'),
     ]
-    colors = [BLUE, TEAL, WARM]
+    for i, (name, detail, fill) in enumerate(levels):
+        top = 240 + i*110
+        left, right = 260-i*45, 580+i*45
+        body += (
+            f'<polygon points="{left},{top} {right},{top} '
+            f'{right+45},{top+110} {left-45},{top+110}" '
+            f'fill="{fill}" stroke="{MUTED}" stroke-width="1.5"/>'
+        )
+        body += text(420, top+45, name, 30, 700, anchor='middle')
+        body += text(420, top+82, detail, 25, anchor='middle')
+    body += text(420, 720, 'Hierarchy schematic; widths are not to scale.', 23, color=MUTED, anchor='middle')
 
-    def x(v):
-        return 445 + (log10(v) - log10(.03)) / (log10(50) - log10(.03)) * 880
+    # Scope stays next to the resource; values use familiar GB/s and TB/s units.
+    rows = [
+        ('Shared memory*', 'All SMs summed', '≈31 TB/s', '≈35–38 TB/s'),
+        ('L2 cache†', 'Across the GPU', '≈12 TB/s', '16.8–21 TB/s'),
+        ('HBM', 'Per GPU', '3.35 TB/s', 'Up to 8 TB/s'),
+        ('NVLink', 'Per GPU, one-way', '450 GB/s', '900 GB/s'),
+        ('InfiniBand', 'Per 400 Gb/s NIC, one-way', '50 GB/s', '50 GB/s'),
+    ]
+    body += rect(840, 230, 685, 58, PALE, 'none')
+    body += text(855, 269, 'Resource', 28, 700)
+    body += text(1210, 269, 'H100', 28, 700, color=BLUE, anchor='middle')
+    body += text(1410, 269, 'B200', 28, 700, color=BLUE, anchor='middle')
+    body += line(840, 288, 1525, 288)
+    for i, (name, scope, h100, b200) in enumerate(rows):
+        top = 288+i*82
+        body += text(855, top+34, name, 27, 700)
+        body += text(855, top+63, scope, 21, color=MUTED)
+        body += text(1210, top+48, h100, 27, anchor='middle')
+        body += text(1410, top+48, b200, 27, anchor='middle')
+        body += line(840, top+82, 1525, top+82, LINE if i==2 else '#c7cdd1', 2.5 if i==2 else 1.5)
 
-    def marker(px, py, series, hollow=False):
-        color = colors[series]
-        fill = 'white' if hollow else color
-        attrs = f'fill="{fill}" stroke="{color}" stroke-width="2.5"'
-        if series == 0:
-            return f'<circle cx="{px}" cy="{py}" r="6" {attrs}/>'
-        if series == 1:
-            return f'<rect x="{px-6}" y="{py-6}" width="12" height="12" {attrs}/>'
-        return f'<path d="M {px} {py-7} L {px+7} {py+6} L {px-7} {py+6} Z" {attrs}/>'
-
-    body = text(75, 183, 'H100 / H200 SXM and DGX B200. Link bandwidths use one direction.', 29)
-    for i, (name, xx) in enumerate([('H100', 87), ('H200', 263), ('B200', 439)]):
-        body += marker(xx, 218, i) + text(xx+19, 226, name, 26, 600, color=colors[i])
-    body += marker(684, 218, 0, True)
-    body += text(703, 226, 'Open markers: SRAM references / estimates', 25, color=MUTED)
-
-    for v in [.05, .1, 1, 10, 50]:
-        body += line(x(v), 244, x(v), 672, '#e0e5e8', 1)
-
-    for r, (label, scope, values) in enumerate(rows):
-        yy = 270 + r*88
-        body += text(75, yy+3, label, 27, 700)
-        body += text(75, yy+32, scope, 22, color=MUTED)
-        for i, (value, label, hollow) in enumerate(values):
-            py = yy + (i-1)*23
-            if value is None:
-                body += text(467, py+8, label, 23, color=colors[i])
-                continue
-            high = value[-1] if isinstance(value, tuple) else value
-            if isinstance(value, tuple):
-                low, high = value
-                px = x(sqrt(low*high))
-                body += line(x(low), py, x(high), py, colors[i], 3)
-                body += line(x(low), py-6, x(low), py+6, colors[i], 2)
-                body += line(x(high), py-6, x(high), py+6, colors[i], 2)
-            else:
-                px = x(value)
-            body += marker(px, py, i, hollow)
-            body += text(x(high)+14, py+8, label, 23, 600, color=colors[i])
-
-    body += line(445, 672, 1325, 672, MUTED)
-    for v, label in [(.05, '0.05'), (.1, '0.1'), (1, '1'), (10, '10'), (50, '50')]:
-        body += line(x(v), 672, x(v), 679, MUTED)
-        body += text(x(v), 704, label, 23, anchor='middle')
-    body += text(885, 735, 'Bandwidth (TB/s, log scale)     0.05 TB/s = 50 GB/s', 24, anchor='middle')
-    body += line(75, 753, 1525, 753)
-    body += text(75, 785, '* Architectural estimates. SRAM throughput depends on clock and access pattern.', 24, color=MUTED)
-    body += text(75, 819, 'L1: H100 ≈31 TB/s estimated across all SMs; no matched H200/B200 data shown.', 24, color=MUTED)
+    body += line(75, 748, 1525, 748)
+    body += text(75, 784, 'NVLink connects GPUs within a node; InfiniBand connects nodes.', 29, 700, color=BLUE)
+    body += text(75, 820, '* Shared-memory estimates sum all SMs. † L2 values are published references / measurements.', 23, color=MUTED)
 
     notes = (
-        'This chart compares bandwidth scales, not latency. It is an original chart of published specifications, '
-        'published microbenchmarks, and explicitly stated architectural estimates; we ran no GPU benchmark. '
-        'The horizontal axis is logarithmic and all plotted values are decimal TB/s (1 TB/s = 1,000 GB/s). '
-        'H100 and H200 mean SXM, and the networking reference is an eight-GPU DGX configuration. '
-        'The entire set of NVLink interfaces on one GPU supplies 900/900/1,800 GB/s bidirectionally for '
-        'H100/H200/B200. The plotted one-way rates are therefore 450/450/900 GB/s, not per-link rates '
-        'or independent simultaneous bandwidth to every peer. HBM is 3.35/4.8/up to 8 TB/s per GPU. '
-        'Do not double HBM bandwidth as if it were a full-duplex network interface. '
-        'InfiniBand is a server configuration rather than a fixed GPU property. These DGX systems have '
-        'eight 400 Gb/s ConnectX-7 compute-network adapters: 400/8 = 50 GB/s per adapter per direction, '
-        'or 400 GB/s per node per direction when all eight adapters are used. Only the per-adapter rate is '
-        'plotted. Usable application and collective bandwidth will be lower and topology-dependent. '
-        'The hollow SRAM markers are not official bandwidth guarantees or a controlled generational benchmark. '
-        'FlashAttention-3 Table 1 uses 12 TB/s for H100 L2 and estimates SMEM bandwidth as '
-        '128 bytes/cycle/SM × 132 SMs × 1.83 GHz = 30.92 TB/s. Other L2 microbenchmarks obtain different '
-        'rates because clock, working-set size, read/write mix, partition locality, and kernel design differ. '
-        'We leave H200 L2 unplotted because an independent comparable value was not verified. '
-        'The H200 SMEM marker uses the same Hopper throughput, 132 SMs, and an assumed 1.83 GHz; '
-        'it is an architectural estimate, not a measurement. The B200 SMEM range uses the FlashAttention-4 '
-        'values of 128 bytes/cycle/SM and 148 SMs with assumed clocks of 1.85–2.0 GHz, yielding '
-        '35.05–37.89 TB/s. This range reflects clock assumptions, not a statistical confidence interval. '
-        'Chips and Cheese measured B200 L2 at 21 TB/s for local-partition working sets and 16.8 TB/s when '
-        'accesses cross partitions. That plotted range represents these access patterns. '
-        'RRZE-HPC reports H100 L1 hits approaching 128 bytes/cycle/SM. Applying the SXM SM count and '
-        '1.83 GHz gives the approximate 31 TB/s L1 aggregate mentioned below the chart; the microbenchmark '
-        'itself used a PCIe H100, so this is a normalized SXM estimate, not its measured total. '
-        'No matched H200/B200 L1 result is plotted. L1 and SMEM share on-chip storage resources but have '
-        'different access semantics; their rates must not be added. All-SM aggregate means independent '
-        'SMs accessing their own local storage concurrently. One H100 SM at 1.83 GHz contributes '
-        'only about 234 GB/s, not 31 TB/s by itself. Register and B200 tensor-memory datapaths are '
-        'not represented by the SMEM numbers. Use this figure to motivate data reuse within a GPU and '
-        'to understand why moving tensors between GPUs or nodes can dominate serving costs.'
+        'The pyramid describes storage inside one GPU. Registers hold each thread’s working values; '
+        'L1 and shared memory are local to each SM; L2 is shared across SMs; and HBM is the GPU’s '
+        'main memory, implemented with stacked DRAM. Pyramid widths are schematic and do not encode '
+        'capacity or bandwidth. NVLink and InfiniBand are communication fabrics, so they appear in '
+        'the table rather than as extra cache levels. The reference uses H100 SXM and an eight-GPU '
+        'DGX B200. NVLink can also span servers in other systems; the within-node label applies to '
+        'these reference configurations. L1 and shared memory use unified on-chip storage resources '
+        'with different access semantics. The table reports SMEM bandwidth, not a sum of L1 and SMEM. '
+        'Registers and Blackwell tensor memory are not assigned an unsupported bandwidth number. '
+        'All units are decimal: 1 TB/s = 1,000 GB/s; 400 Gb/s = 50 GB/s. '
+        'The 450/900 GB/s NVLink values are aggregate one-way bandwidth per H100/B200 GPU, obtained '
+        'from NVIDIA’s 900/1,800 GB/s bidirectional specifications. They are not per-link rates or '
+        'independent simultaneous bandwidth to every peer. HBM is 3.35/up to 8 TB/s per GPU; '
+        'the official DGX B200 page specifies 64 TB/s summed across eight GPUs. HBM is not a '
+        'full-duplex network interface whose quoted rate should be doubled. '
+        'Both DGX reference configurations have eight 400 Gb/s ConnectX-7 compute-network adapters. '
+        'The table uses 50 GB/s per adapter per direction, not the 400 GB/s node aggregate. '
+        'InfiniBand speed depends on the server networking configuration, not only the GPU model. '
+        'Application and collective bandwidth depend on topology, message size and contention. '
+        'The asterisk and dagger distinguish SRAM approximations from product specifications. '
+        'FlashAttention-3 Table 1 uses 12 TB/s as its H100 L2 reference and estimates shared memory '
+        'as 128 bytes/cycle/SM × 132 SMs × 1.83 GHz = 30.92 TB/s. '
+        'The B200 SMEM estimate uses FlashAttention-4’s 128 bytes/cycle/SM and 148 SMs with assumed '
+        'clocks of 1.85–2.0 GHz, giving 35.05–37.89 TB/s. This is a clock-based estimate, not a '
+        'benchmark confidence interval. All-SM aggregate means SMs concurrently access their own '
+        'local storage. A single H100 SM at 1.83 GHz contributes approximately 234 GB/s. '
+        'Chips and Cheese measured B200 L2 at 21 TB/s for local-partition working sets and '
+        '16.8 TB/s when accesses cross partitions. Cache throughput varies with clock, access pattern '
+        'and benchmark; these cache entries are not a controlled generational comparison or '
+        'guaranteed peaks. Sources are linked below. This table reproduces and derives cited values; '
+        'we ran no GPU benchmark.'
     )
-    return slide('Bandwidth: on-chip memory, HBM and GPU links', body, notes, SOURCES, 'Hardware bandwidth')
+    return slide('GPU memory hierarchy and bandwidth', body, notes, SOURCES, 'Hardware bandwidth')

@@ -13,7 +13,7 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'.build/week4-qa');
  const settle=()=>page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));await settle();
  const slides=await page.locator('.slide').evaluateAll(ss=>ss.map(s=>({id:s.id,title:s.dataset.title,section:s.dataset.section})));
  assert.equal(slides.length,30);
- assert.equal(slides[1].title,'Bandwidth: on-chip memory, HBM and GPU links');
+ assert.equal(slides[1].title,'GPU memory hierarchy and bandwidth');
  assert.ok(slides.slice(2,12).every(s=>s.section.startsWith('Speculative decoding')));
  assert.ok(slides.slice(6,12).every(s=>s.section.startsWith('Speculative decoding theory')));
  assert.ok(slides[6].title.startsWith('Quiz:'));
