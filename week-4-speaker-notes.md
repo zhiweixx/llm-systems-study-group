@@ -1,8 +1,8 @@
 # Week 4 — Speculative decoding and LLM serving
 
-36 slides, beginning with six visual lessons on speculative decoding (12–15 minutes), a sampling quiz with its worked solution (4–5 minutes), and four theory slides (8–10 minutes). The full teaching sequence is approximately 60–65 minutes, plus 15 minutes of discussion. These are planning estimates; choose sections for a 50-minute meeting.
+34 slides, beginning with a two-slide introduction to speculative decoding and its exact sampling algorithm (4–5 minutes), KV continuation and a timing comparison (about 4 minutes), a multiple-choice sampling quiz and its solution (about 3 minutes), and four theory slides (8–10 minutes). The full teaching sequence is approximately 50–55 minutes, plus 15 minutes of discussion. These are planning estimates; choose sections for a 50-minute meeting.
 
-Route: 1 opening; 2–7 speculative decoding walkthrough; 8–9 sampling quiz and numerical solution; 10–13 correctness and performance theory; 14–15 serving case and lifecycle; 16–22 prefix reuse and Question 1; 23–30 scheduling, routing, deployment and Question 2; 31–35 measurement; 36 discussion. Questions have immediate solution slides.
+Route: 1 opening; 2–3 speculative decoding and exact sampling; 4–5 KV continuation and cost; 6–7 multiple-choice quiz and solution; 8–11 correctness and performance theory; 12–13 serving case and lifecycle; 14–20 prefix reuse and Question 1; 21–28 scheduling, routing, deployment and Question 2; 29–33 measurement; 34 discussion. Questions have immediate solution slides.
 
 All diagrams and numerical cases are authored teaching examples, not published GPU measurements or verified company interview questions. Primary sources appear on the slides and below. Documentation checked September 28, 2026; benchmark flags should be checked against the installed vLLM version.
 
@@ -12,89 +12,72 @@ The [companion lab](https://zhiweixx.github.io/llm-systems-study-group/week-4/la
 
 **Section: Opening**
 
-Open with the six-slide speculative-decoding lesson: motivation, parallel verification, greedy acceptance, KV rollback and the bonus, exact sampling, then a timing experiment. Allow 12–15 minutes including the interactive steps, then 4–5 minutes for the sampling quiz and its numerical solution, followed by 8–10 minutes for the four theory slides: exact sampling, acceptance as distribution overlap, expected tokens per round, and expected speedup. Slides 8–9 contain the quiz and numerical solution; 10–13 develop the theory; 14–15 establish the four-GPU serving case; 16–22 teach prefix reuse; 23–30 cover scheduling, routing and deployment; 31–35 cover measurement; 36 begins discussion. The expanded full sequence is approximately 60–65 minutes plus 15 minutes of discussion, not a rehearsed duration. Choose later sections if retaining a 50-minute meeting. Numerical cases and diagrams are authored teaching examples, not GPU measurements.
+Open with the two-slide speculative-decoding introduction: the draft–verify mechanism followed by the exact stochastic sampling algorithm. Allow 4–5 minutes for slides 2–3, about 4 minutes for KV continuation and the timing comparison on slides 4–5, and about 3 minutes for the multiple-choice sampling quiz and its solution on slides 6–7. Slides 8–11 develop correctness and performance theory (8–10 minutes): exact sampling, acceptance as distribution overlap, expected tokens per round, and expected speedup. Slides 12–13 establish the four-GPU serving case; 14–20 teach prefix reuse; 21–28 cover scheduling, routing and deployment; 29–33 cover measurement; 34 begins discussion. The full sequence is approximately 50–55 minutes plus 15 minutes of discussion, not a rehearsed duration. Choose later sections if retaining a 50-minute meeting. Numerical cases and diagrams are authored teaching examples, not GPU measurements.
 
 
-## 2. Speculative decoding: fewer serial target calls
+## 2. Speculative decoding: draft, verify, commit
 
-**Section: Speculative decoding · 12–15 min**
+**Section: Speculative decoding · overview**
 
-Begin with the bottleneck from Week 2: ordinary autoregressive decoding must choose a token before the next unknown input can be processed. At low batch sizes, reading target-model weights can dominate, leaving arithmetic capacity for checking several known positions together. A smaller proposal model can exploit that headroom. The lower diagram previews our later four-proposal example: two proposals survive and a target correction provides the third output token. The target is not replaced by the draft. Verification is one model forward call, not one CUDA kernel. The target still reads context KV and performs extra arithmetic. This schematic makes no measured timing claim. We teach the classical separate-draft-model algorithm; other proposal mechanisms exist but are outside this six-slide lesson.
-
-- [Leviathan et al., §2–3](https://proceedings.mlr.press/v202/leviathan23a/leviathan23a.pdf)
-- [vLLM speculative decoding](https://docs.vllm.ai/en/latest/features/speculative_decoding/)
-
-## 3. Why can the target verify several tokens at once?
-
-**Section: Speculative decoding**
-
-Let the committed prefix P end in u. The target cache covers P except u, which has been emitted but not yet processed. This is the common generation-loop convention. One target forward processes u and all four draft inputs. Its five output positions score d1, d2, d3, d4 and a bonus. Each table row shows visible new inputs; all also attend to cached history before u. Logits from u predict d1; logits from The predict d2, and so forth. The causal mask prevents future input leakage. Matrix operations across known input positions run together within each layer, like a short prefill. Layers still depend on previous layers. Candidate positions are not independent future generations: the fourth score assumes the draft prefix ending in sat. The draft itself produces its proposals sequentially in this classical scheme. If the first next-token distribution is already stored at a prefix boundary, an equivalent implementation can reuse it; the context semantics are unchanged.
+h is the committed history and d_<i is the draft prefix before position i. The classical draft model samples gamma proposals autoregressively. Since those candidates are now known, the target can score all candidate-conditioned contexts together using causal attention, as in a short prefill. This computes probability distributions, not independently sampled target tokens or argmax matches. In a common KV convention, the final committed token has not yet been processed; feed it plus the draft tokens to obtain gamma candidate scores and a bonus distribution. Equivalently, an already computed first-position distribution can be reused. Each proposal and its target score condition on the same history. Verification is one model call, not one CUDA kernel, and layers remain sequential. At the first rejection the subsequent draft history is invalid, so discard that suffix. If every proposal is accepted, sample one bonus from the final target distribution. The exact stochastic acceptance and residual correction appear next. The range of emitted tokens ignores EOS and output limits. Lower-batch target decode can benefit because multi-position verification amortizes weight movement; extra draft and verification work can outweigh those savings.
 
 - [Leviathan et al., §2–3](https://proceedings.mlr.press/v202/leviathan23a/leviathan23a.pdf)
-- [Transformers assisted decoding](https://github.com/huggingface/transformers/blob/main/src/transformers/generation/utils.py)
-
-## 4. A complete round: draft → verify → accept or reject
-
-**Section: Speculative decoding**
-
-Click through all five stages. The fourth target prediction deliberately matches quietly: this demonstrates that agreement alone is insufficient after an earlier rejection. That prediction assumed The cat sat, whereas the committed result is The cat slept. Therefore both the rejected token and its continuation must be discarded. The two accepted tokens plus the correction produce three output tokens from one target verification round. Greedy equivalence assumes the same target computation and tie-breaking; floating-point variations between kernel shapes can matter in implementations. Here the target remains the authority for every committed position. The sentence is an authored toy vocabulary, not a measured model output. In streaming, provisional guesses must not be presented as accepted output.
-
-- [Leviathan et al., §2–3](https://proceedings.mlr.press/v202/leviathan23a/leviathan23a.pdf)
-
-## 5. After verification: rollback, continuation, and the bonus
-
-**Section: Speculative decoding**
-
-Before verification the target cache covers P except its last token u. Verification evaluates u and all four draft input positions, so P is now fully cached. When sat is rejected, the target KV for The and cat is valid because their histories are unchanged. KV for sat and quietly belongs to an invalid branch and must no longer be visible to attention. The replacement slept is selected from a distribution already computed at the previous position; slept itself has not been fed through the target, so its KV is pending until continuation. In the all-accepted alternative, the final draft position provides the distribution for one bonus token. That bonus is also not yet an evaluated target input. In practice engines track valid lengths or block mappings; rollback does not necessarily erase bytes. The draft model has its own weights and KV state, which must be synchronized with the committed sequence; accepted draft KV cannot be substituted for target KV. We omit EOS and length-limit termination, which can truncate the emitted block.
-
-- [Leviathan et al., §2–3](https://proceedings.mlr.press/v202/leviathan23a/leviathan23a.pdf)
-- [Transformers assisted decoding](https://github.com/huggingface/transformers/blob/main/src/transformers/generation/utils.py)
-
-## 6. Sampling: correct the draft’s probability bias
-
-**Section: Speculative decoding**
-
-The bars represent probability mass, not a measured set of exactly 100 draws. q proposes A with probability 0.8, and we keep each A with probability 0.75, giving accepted A mass 0.6. Proposed B is always accepted, giving mass 0.2. Rejection occurs with total probability 0.2. The positive residual p−q is 0 for A and 0.2 for B, so its normalized distribution puts probability 1 on B; adding that correction gives final mass 0.4 for B. For a proposed x, q(x)>0, so the ratio is defined. If p=q, acceptance is certain and the zero residual is never used. For a sequence, each distribution conditions on the same accepted history, and accept/reject decisions stop at the first rejection; later precomputed target scores are discarded. If all candidates pass, draw the bonus directly from the next target distribution. Use distributions after the intended temperature or other sampling transformations. Distributional equivalence does not imply identical text for every random seed. This is classical exact speculative sampling, not an approximation that silently changes the target distribution.
-
 - [Chen et al., Algorithm 2](https://arxiv.org/html/2302.01318v1)
-- [Leviathan et al., §2–3](https://proceedings.mlr.press/v202/leviathan23a/leviathan23a.pdf)
 
-## 7. When does the extra work pay off?
+## 3. Exact speculative sampling
+
+**Section: Speculative decoding · algorithm**
+
+This is the stochastic sampling algorithm in Leviathan et al. Section 2.3, written in native notation rather than using an argmax illustration. Fix one history, draw X from q and an independent U uniformly on (0,1), then accept if U is at most min(1,p(X)/q(X)). A proposal necessarily has q(X)>0, so the evaluated ratio is defined. On rejection draw a new token from the normalized positive residual p-q. The residual normalizer equals the overall rejection probability; if it is zero, p=q and the correction branch is never reached. Tokens outside the proposal support can still be generated by the residual. For a speculative sequence apply this rule in order to each reached candidate, using p_i and q_i conditioned on the identical prefix. Stop after the first rejection and discard later draft candidates and invalid scores. If all candidates pass, sample the bonus directly from the target distribution after the full accepted draft. Ordinary probabilities after temperature, top-p or other intended sampling transformations are required; raw logits cannot be used in the ratio. The exactness claim is about the ideal probability algorithm. It does not require the same sampled text for a fixed RNG seed or numerically identical floating-point implementations. The proof follows the multiple-choice quiz.
+
+- [Leviathan et al., §2.3 / Algorithm 1](https://proceedings.mlr.press/v202/leviathan23a/leviathan23a.pdf)
+- [Chen et al., Algorithm 2](https://arxiv.org/html/2302.01318v1)
+
+## 4. After verification: rollback, continuation, and the bonus
 
 **Section: Speculative decoding**
 
-Start at two accepted proposals, matching the greedy toy. Four sequential draft steps cost 4 ms, verification costs 14 ms and bookkeeping costs 2 ms, for 20 ms to emit three tokens; ordinary target decoding would take 30 ms. Move accepted-prefix length to zero: the draft round still costs 20 ms but emits only the correction, versus 10 ms normally. Move to four: all four proposals plus a bonus yield five outputs. Then increase verification time: good acceptance can still fail to pay off. For this illustrative single round, emitted tokens = accepted prefix length + one correction or bonus; EOS and output limits are excluded. The sliders vary independent assumptions and are not hardware predictions. Across actual rounds use total elapsed time divided by total emitted tokens, rather than averaging speedup ratios. A separate draft also uses weight memory and its own KV cache; a configuration that speeds one stream can reduce capacity or throughput under concurrency. Verification time need not equal one-token target latency.
+Before verification the target cache covers h except its last token u. Verification evaluates u and all four draft input positions, so h is now fully cached. When sat is rejected, the target KV for The and cat is valid because their histories are unchanged. KV for sat and quietly belongs to an invalid branch and must no longer be visible to attention. The replacement slept is selected from a distribution already computed at the previous position; slept itself has not been fed through the target, so its KV is pending until continuation. In the all-accepted alternative, the final draft position provides the distribution for one bonus token. That bonus is also not yet an evaluated target input. In practice engines track valid lengths or block mappings; rollback does not necessarily erase bytes. The draft model has its own weights and KV state, which must be synchronized with the committed sequence; accepted draft KV cannot be substituted for target KV. We omit EOS and length-limit termination, which can truncate the emitted block.
+
+- [Leviathan et al., §2–3](https://proceedings.mlr.press/v202/leviathan23a/leviathan23a.pdf)
+- [Transformers assisted decoding](https://github.com/huggingface/transformers/blob/main/src/transformers/generation/utils.py)
+
+## 5. When does the extra work pay off?
+
+**Section: Speculative decoding**
+
+Start at two accepted proposals, matching the rollback example. Four sequential draft steps cost 4 ms, verification costs 14 ms and bookkeeping costs 2 ms, for 20 ms to emit three tokens; ordinary target decoding would take 30 ms. Move accepted-prefix length to zero: the draft round still costs 20 ms but emits only the correction, versus 10 ms normally. Move to four: all four proposals plus a bonus yield five outputs. Then increase verification time: good acceptance can still fail to pay off. For this illustrative single round, emitted tokens = accepted prefix length + one correction or bonus; EOS and output limits are excluded. The sliders vary independent assumptions and are not hardware predictions. Across actual rounds use total elapsed time divided by total emitted tokens, rather than averaging speedup ratios. A separate draft also uses weight memory and its own KV cache; a configuration that speeds one stream can reduce capacity or throughput under concurrency. Verification time need not equal one-token target latency.
 
 - [Leviathan et al., §2–3](https://proceedings.mlr.press/v202/leviathan23a/leviathan23a.pdf)
 - [vLLM speculative decoding](https://docs.vllm.ai/en/latest/features/speculative_decoding/)
 
-## 8. Quiz: What should we sample after a rejection?
+## 6. Quiz: Resampling from the target after rejection
 
-**Section: Speculative decoding theory · quiz**
+**Section: Speculative decoding theory · multiple-choice quiz**
 
-Allow approximately 4–5 minutes before showing the numerical solution. This quiz adapts the algorithmic claim in Leviathan et al. Section 2.3 into a derivation exercise; the probabilities are an authored toy example. The target is p and the draft is q. Fix one history throughout: this is not compensation for tokens accepted at earlier positions. Ask participants to track the joint probability of proposing and accepting a token before choosing the replacement distribution. The deliberately incorrect branch r=p yields final probabilities (0.28,0.40,0.18,0.14). A correct replacement has probabilities (0,0.75,0.25,0). The next slide gives numerical accounting and the following slide proves the arbitrary-distribution result. Both distributions are normalized over the same vocabulary after any intended sampling transformations. A proposed token always has q(x)>0, so the acceptance ratio is evaluated only there. If p=q, rejection never occurs and the correction distribution is unnecessary.
+Allow approximately 2–3 minutes for discussion and the immediate solution. There is one universally valid expression, C: Pr(Y=x)=min(p(x),q(x))+Z*p(x), where Z=Pr(reject)=1-sum_x min(p(x),q(x)). The quiz deliberately changes the correct algorithm by sampling the replacement from p. A is the desired target law but not the law of this altered procedure in general. B mistakenly uses q as the conditional law of accepted proposals; accepting with token-dependent probabilities changes that law. C adds the accepted joint mass and the replacement joint mass. D uses q for the replacement, contrary to the stated procedure. Some options can agree for special distributions such as p=q, but C is the identity valid for all p,q. The acceptance ratio is evaluated only for sampled X with q(X)>0. This is an authored assessment based on Leviathan Section 2.3, not a reported company interview question.
 
 - [Adapted from Leviathan et al., §2.3](https://proceedings.mlr.press/v202/leviathan23a/leviathan23a.pdf)
 
-## 9. Quiz solution: why resampling from p is biased
+## 7. Quiz solution: account for both output paths
 
 **Section: Speculative decoding theory · quiz solution**
 
-The accepted probability vector is min(p,q)=(0.20,0.20,0.10,0.10). Its total is 0.60, so rejection occurs with probability Z=0.40. If the replacement is sampled from p, the emitted vector is min(p,q)+Z*p=(0.28,0.40,0.18,0.14), which differs from p. This is a mixture over alternative outcomes at one fixed history, not a correction for earlier accepted tokens in a sequence. Expected counts across 100 independent draws make the accounting visible; an actual run need not have these exact counts. To reach the target counts (20,50,20,10), the accepted counts (20,20,10,10) need an additional (0,30,10,0). Normalize that missing mass over the 40 rejected draws to obtain r=(0,0.75,0.25,0). Then min(p,q)+Z*r=p for every token. For arbitrary distributions, r(x)=max(p(x)-q(x),0)/Z with Z=sum_y max(p(y)-q(y),0). If p=q then Z=0, every proposal is accepted and the correction branch is never evaluated. The following slide presents the full proof and explains sequence-level exactness.
+C follows by summing the joint probabilities of two disjoint events: emitting x from an accepted proposal, and emitting x from the replacement branch. The former is q(x)*min(1,p(x)/q(x))=min(p(x),q(x)); the latter is Z*p(x) because the replacement is an independent draw from p and rejection occurs with probability Z. B is a common misuse of a mixture: the accepted component is not q. For 0<Z<1, its conditional law is min(p,q)/(1-Z). If Z=0 the branch weights are degenerate and the same unconditional expression still applies. The displayed four-token counterexample has accepted mass (0.20,0.20,0.10,0.10), total acceptance 0.60 and rejection 0.40. Adding Z*p gives (0.28,0.40,0.18,0.14), not p. A therefore fails in general; D is the law of a different rule that resamples from q. Correct residual resampling replaces Z*p by max(p-q,0), yielding min(p,q)+max(p-q,0)=p. The following proof derives the residual normalizer. Equal distributions and disjoint-support cases can make several distractors coincide numerically with C; the question explicitly asks for the identity valid for arbitrary distributions.
 
 - [Adapted from Leviathan et al., §2.3](https://proceedings.mlr.press/v202/leviathan23a/leviathan23a.pdf)
 - [Leviathan et al., App. A.1](https://proceedings.mlr.press/v202/leviathan23a/leviathan23a.pdf)
 
-## 10. Why speculative sampling is exact
+## 8. Why speculative sampling is exact
 
 **Section: Speculative decoding theory · 8–10 min**
 
-This proof completes part 3 of the quiz and generalizes its numerical solution. Fix a history and let p and q be normalized target and proposal distributions over a common vocabulary, after any intended sampling transformations. Propose X from q and accept with probability min(1,p(X)/q(X)). For any vocabulary item x, the joint probability of proposing and accepting x is min(p(x),q(x)). Its sum is the total acceptance probability. Since p and q each sum to one, the omitted target mass Z=sum_x max(p(x)-q(x),0) equals the rejection probability 1-sum_x min(p(x),q(x)). On rejection draw Y from r(x)=max(p(x)-q(x),0)/Z. This contributes unconditional mass Z*r(x), exactly filling the missing target mass. Thus min(p,q)+max(p-q,0)=p pointwise. When q(x)=0 the algorithm cannot propose x, so it never evaluates that ratio for such an x; positive target mass there comes through the residual. When Z=0, the rejection branch has zero probability. At successive positions, use the distributions for the actual accepted history and discard the invalid suffix after a rejection. This yields the target autoregressive joint distribution by the chain rule. The proof concerns the ideal probability algorithm; floating-point implementations can differ numerically. Chen uses the opposite p/q naming; this deck consistently uses p for target and q for draft.
+This proof completes the correction motivated by the multiple-choice quiz. Fix a history and let p and q be normalized target and proposal distributions over a common vocabulary, after any intended sampling transformations. Propose X from q and accept with probability min(1,p(X)/q(X)). For any vocabulary item x, the joint probability of proposing and accepting x is min(p(x),q(x)). Its sum is the total acceptance probability. Since p and q each sum to one, the omitted target mass Z=sum_x max(p(x)-q(x),0) equals the rejection probability 1-sum_x min(p(x),q(x)). On rejection draw Y from r(x)=max(p(x)-q(x),0)/Z. This contributes unconditional mass Z*r(x), exactly filling the missing target mass. Thus min(p,q)+max(p-q,0)=p pointwise. When q(x)=0 the algorithm cannot propose x, so it never evaluates that ratio for such an x; positive target mass there comes through the residual. When Z=0, the rejection branch has zero probability. At successive positions, use the distributions for the actual accepted history and discard the invalid suffix after a rejection. This yields the target autoregressive joint distribution by the chain rule. The proof concerns the ideal probability algorithm; floating-point implementations can differ numerically. Chen uses the opposite p/q naming; this deck consistently uses p for target and q for draft.
 
 - [Leviathan et al., App. A.1](https://proceedings.mlr.press/v202/leviathan23a/leviathan23a.pdf)
 - [Chen et al., §4.2](https://arxiv.org/html/2302.01318v1#S4.SS2)
 
-## 11. Acceptance measures distribution overlap
+## 9. Acceptance measures distribution overlap
 
 **Section: Speculative decoding theory**
 
@@ -102,7 +85,7 @@ For a fixed context, sum the accepted mass min(p(x),q(x)) over the vocabulary. U
 
 - [Leviathan et al., §3](https://proceedings.mlr.press/v202/leviathan23a/leviathan23a.pdf)
 
-## 12. Expected tokens per verification round
+## 10. Expected tokens per verification round
 
 **Section: Speculative decoding theory**
 
@@ -110,7 +93,7 @@ Let A be the consecutive accepted-prefix length among gamma proposals. N=A+1 inc
 
 - [Leviathan et al., §3](https://proceedings.mlr.press/v202/leviathan23a/leviathan23a.pdf)
 
-## 13. Expected speedup and draft length
+## 11. Expected speedup and draft length
 
 **Section: Speculative decoding theory**
 
@@ -118,7 +101,7 @@ Use a stationary fixed-workload approximation and enough generation rounds for a
 
 - [Leviathan et al., §3](https://proceedings.mlr.press/v202/leviathan23a/leviathan23a.pdf)
 
-## 14. The case: four GPUs, variable prompts, latency targets
+## 12. The case: four GPUs, variable prompts, latency targets
 
 **Section: Setup · 4 min**
 
@@ -126,7 +109,7 @@ Use one model and precision across all experiments. A replica is a complete mode
 
 - [vLLM metrics](https://docs.vllm.ai/en/latest/design/metrics/)
 
-## 15. Follow one request from arrival to completion
+## 13. Follow one request from arrival to completion
 
 **Section: Setup · 4 min**
 
@@ -135,7 +118,7 @@ This is a logical sequence, not a scale drawing or a promise of one GPU kernel p
 - [vLLM metrics](https://docs.vllm.ai/en/latest/design/metrics/)
 - [Berkeley L18](https://scalable-ai.eecs.berkeley.edu/S2026/assets/lecture_slides/lecture_18.pdf)
 
-## 16. Reuse KV when the causal prefix matches
+## 14. Reuse KV when the causal prefix matches
 
 **Section: Prefix caching**
 
@@ -143,7 +126,7 @@ Use P and A/B as symbolic token IDs, not words. For the ordinary causal Transfor
 
 - [vLLM prefix-cache design](https://docs.vllm.ai/en/stable/design/prefix_caching/)
 
-## 17. Share prefix blocks; allocate each unique suffix
+## 15. Share prefix blocks; allocate each unique suffix
 
 **Section: Prefix caching**
 
@@ -152,7 +135,7 @@ Step through the arrival of A, B, then C at the same replica. All three prompt K
 - [PagedAttention paper](https://arxiv.org/abs/2309.06180)
 - [vLLM prefix-cache design](https://docs.vllm.ai/en/stable/design/prefix_caching/)
 
-## 18. A finished request does not require deleting its KV
+## 16. A finished request does not require deleting its KV
 
 **Section: Prefix caching**
 
@@ -160,7 +143,7 @@ The reference count records how many current requests depend on a block. Finishi
 
 - [vLLM prefix-cache design](https://docs.vllm.ai/en/stable/design/prefix_caching/)
 
-## 19. Cache hit rate and KV occupancy answer different questions
+## 17. Cache hit rate and KV occupancy answer different questions
 
 **Section: Prefix caching**
 
@@ -169,7 +152,7 @@ The token-hit fraction answers what portion of the arriving prompt tokens used e
 - [PagedAttention paper](https://arxiv.org/abs/2309.06180)
 - [vLLM prefix-cache design](https://docs.vllm.ai/en/stable/design/prefix_caching/)
 
-## 20. What a prefix hit saves—and what remains
+## 18. What a prefix hit saves—and what remains
 
 **Section: Prefix caching**
 
@@ -177,7 +160,7 @@ The direct algorithmic saving is the repeated prefill computation for the reused
 
 - [vLLM prefix caching](https://docs.vllm.ai/en/latest/features/automatic_prefix_caching/)
 
-## 21. Question 1: more cache hits, worse p95 TTFT
+## 19. Question 1: more cache hits, worse p95 TTFT
 
 **Section: Question 1**
 
@@ -185,7 +168,7 @@ Give the group about one minute to reason before showing the solution. These val
 
 - [SGLang cache-aware routing](https://github.com/sgl-project/sglang/blob/main/sgl-model-gateway/src/policies/cache_aware.rs)
 
-## 22. Solution 1: saved work must outweigh additional waiting
+## 20. Solution 1: saved work must outweigh additional waiting
 
 **Section: Question 1 solution**
 
@@ -193,7 +176,7 @@ B is preferred under the stated estimates: a cache miss with a short wait can fi
 
 - [SGLang cache-aware routing](https://github.com/sgl-project/sglang/blob/main/sgl-model-gateway/src/policies/cache_aware.rs)
 
-## 23. Queues grow when arrivals outrun completions
+## 21. Queues grow when arrivals outrun completions
 
 **Section: Scheduling**
 
@@ -201,7 +184,7 @@ The numbers are a teaching construction, not a GPU benchmark. Count complete req
 
 - [Orca, OSDI 2022](https://www.usenix.org/conference/osdi22/presentation/yu)
 
-## 24. Three budgets constrain each scheduling round
+## 22. Three budgets constrain each scheduling round
 
 **Section: Scheduling**
 
@@ -210,7 +193,7 @@ Use the same four-GPU service, but zoom into the scheduler on one replica. The f
 - [vLLM: scheduler tuning](https://docs.vllm.ai/en/latest/configuration/optimization/)
 - [Orca, OSDI 2022](https://www.usenix.org/conference/osdi22/presentation/yu)
 
-## 25. Chunking controls how much a new prompt interrupts chat
+## 23. Chunking controls how much a new prompt interrupts chat
 
 **Section: Scheduling**
 
@@ -219,7 +202,7 @@ Click Next step three times. At the start, four existing chat requests are decod
 - [vLLM: scheduler tuning](https://docs.vllm.ai/en/latest/configuration/optimization/)
 - [Sarathi-Serve, OSDI 2024](https://arxiv.org/abs/2403.02310)
 
-## 26. Admission must consider future KV growth
+## 24. Admission must consider future KV growth
 
 **Section: Scheduling**
 
@@ -227,7 +210,7 @@ Active, retained and empty describe block-content states; retained blocks may al
 
 - [vLLM: scheduler tuning](https://docs.vllm.ai/en/latest/configuration/optimization/)
 
-## 27. Routing balances prefix reuse against local load
+## 25. Routing balances prefix reuse against local load
 
 **Section: Deployment**
 
@@ -235,7 +218,7 @@ These four boxes are the four one-GPU replicas from the case study. All hold the
 
 - [SGLang: cache-aware routing](https://github.com/sgl-project/sglang/blob/main/sgl-model-gateway/src/policies/cache_aware.rs)
 
-## 28. Compare shared and separate prefill/decode pools
+## 26. Compare shared and separate prefill/decode pools
 
 **Section: Deployment**
 
@@ -244,7 +227,7 @@ Week 2 introduced prefill–decode disaggregation. Here the new issue is resourc
 - [DistServe, OSDI 2024](https://www.usenix.org/conference/osdi24/presentation/zhong-yinmin)
 - [vLLM: disaggregated prefill](https://docs.vllm.ai/en/latest/features/disagg_prefill/)
 
-## 29. Question 2: Why do chat streams stall on long prompts?
+## 27. Question 2: Why do chat streams stall on long prompts?
 
 **Section: Questions**
 
@@ -253,7 +236,7 @@ This is an authored interview-style problem, not a question attributed to a part
 - [Sarathi-Serve, OSDI 2024](https://arxiv.org/abs/2403.02310)
 - [DistServe, OSDI 2024](https://www.usenix.org/conference/osdi24/presentation/zhong-yinmin)
 
-## 30. Solution 2: Attribute the delay before changing deployment
+## 28. Solution 2: Attribute the delay before changing deployment
 
 **Section: Questions**
 
@@ -262,7 +245,7 @@ First separate the duration of GPU kernels from the time between outputs seen by
 - [Sarathi-Serve, OSDI 2024](https://arxiv.org/abs/2403.02310)
 - [DistServe, OSDI 2024](https://www.usenix.org/conference/osdi24/presentation/zhong-yinmin)
 
-## 31. Design the experiment before choosing the winner
+## 29. Design the experiment before choosing the winner
 
 **Section: Benchmarking · 7 min**
 
@@ -270,7 +253,7 @@ Replay identical request content and arrival patterns, ideally in several random
 
 - [vLLM benchmark CLI](https://docs.vllm.ai/en/latest/cli/bench/serve/)
 
-## 32. Request rate and concurrency are different controls
+## 30. Request rate and concurrency are different controls
 
 **Section: Benchmarking · 7 min**
 
@@ -278,7 +261,7 @@ The left is a closed-loop client. Its achieved request rate drops automatically 
 
 - [vLLM benchmark CLI](https://docs.vllm.ai/en/latest/cli/bench/serve/)
 
-## 33. More throughput can still violate the service target
+## 31. More throughput can still violate the service target
 
 **Section: Benchmarking · 7 min**
 
@@ -287,7 +270,7 @@ These values are authored for interpretation, not fitted or measured. Assume sta
 - [DistServe §2–3](https://www.usenix.org/system/files/osdi24-zhong-yinmin.pdf)
 - [vLLM benchmark CLI](https://docs.vllm.ai/en/latest/cli/bench/serve/)
 
-## 34. Connect a bad user metric to an engine cause
+## 32. Connect a bad user metric to an engine cause
 
 **Section: Benchmarking · 7 min**
 
@@ -296,7 +279,7 @@ Each row is a hypothesis test, not a lookup table guaranteeing the cause. For ex
 - [vLLM metrics](https://docs.vllm.ai/en/latest/design/metrics/)
 - [DistServe §2–3](https://www.usenix.org/system/files/osdi24-zhong-yinmin.pdf)
 
-## 35. A reproducible serving experiment
+## 33. A reproducible serving experiment
 
 **Section: Benchmarking · 7 min**
 
@@ -305,7 +288,7 @@ Optional work after the meeting. The script requires a working endpoint and a co
 - [Companion lab](https://zhiweixx.github.io/llm-systems-study-group/week-4/lab.html)
 - [vLLM benchmark CLI](https://docs.vllm.ai/en/latest/cli/bench/serve/)
 
-## 36. Discussion: defend a serving decision with evidence
+## 34. Discussion: defend a serving decision with evidence
 
 **Section: Discussion · 15 min**
 

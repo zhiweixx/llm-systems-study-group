@@ -15,7 +15,7 @@ def all_slides():
     from week4.speculative_theory import get_slides as theory
     opening = core()
     slides = opening[:1]+speculative()+theory()+opening[1:]+prefix()+scheduling()+benchmark()
-    assert len(slides) == 36
+    assert len(slides) == 34
     return slides
 
 def build():
@@ -39,8 +39,8 @@ def build():
     '''
     parts=[]
     notes=['# Week 4 — Speculative decoding and LLM serving','',
-      '36 slides, beginning with six visual lessons on speculative decoding (12–15 minutes), a sampling quiz with its worked solution (4–5 minutes), and four theory slides (8–10 minutes). The full teaching sequence is approximately 60–65 minutes, plus 15 minutes of discussion. These are planning estimates; choose sections for a 50-minute meeting.','',
-      'Route: 1 opening; 2–7 speculative decoding walkthrough; 8–9 sampling quiz and numerical solution; 10–13 correctness and performance theory; 14–15 serving case and lifecycle; 16–22 prefix reuse and Question 1; 23–30 scheduling, routing, deployment and Question 2; 31–35 measurement; 36 discussion. Questions have immediate solution slides.','',
+      '34 slides, beginning with a two-slide introduction to speculative decoding and its exact sampling algorithm (4–5 minutes), KV continuation and a timing comparison (about 4 minutes), a multiple-choice sampling quiz and its solution (about 3 minutes), and four theory slides (8–10 minutes). The full teaching sequence is approximately 50–55 minutes, plus 15 minutes of discussion. These are planning estimates; choose sections for a 50-minute meeting.','',
+      'Route: 1 opening; 2–3 speculative decoding and exact sampling; 4–5 KV continuation and cost; 6–7 multiple-choice quiz and solution; 8–11 correctness and performance theory; 12–13 serving case and lifecycle; 14–20 prefix reuse and Question 1; 21–28 scheduling, routing, deployment and Question 2; 29–33 measurement; 34 discussion. Questions have immediate solution slides.','',
       'All diagrams and numerical cases are authored teaching examples, not published GPU measurements or verified company interview questions. Primary sources appear on the slides and below. Documentation checked September 28, 2026; benchmark flags should be checked against the installed vLLM version.','',
       'The [companion lab](https://zhiweixx.github.io/llm-systems-study-group/week-4/lab.html) includes a dry-run-first request-rate sweep. No GPU benchmark was run to produce these slides. The HTML is self-contained and works offline; reference links need internet.','']
     for i,s in enumerate(slides,1):
@@ -60,13 +60,13 @@ def build():
     chrome=f'''<nav class="deck-chrome" aria-label="Presentation controls"><div class="chrome-left"><button id="prev" type="button" aria-label="Previous slide">←</button><span id="counter" aria-live="polite">1 / {len(slides)}</span><button id="next" type="button" aria-label="Next slide">→</button><span id="slide-title"></span></div><div class="chrome-right"><button id="overview-toggle" type="button">Slides</button><button id="notes-toggle" type="button">Notes</button><button id="fullscreen" type="button">Full screen</button><button id="print" type="button">Print / PDF</button><button id="help-toggle" type="button" aria-label="Keyboard help">?</button></div></nav>
 <section id="notes-panel" class="deck-overlay" hidden><div class="panel-header"><h2>Speaker notes</h2><button data-close-overlay="true" type="button">Close</button></div><div id="notes-content"></div></section>
 <section id="overview-panel" class="deck-overlay" hidden><div class="panel-header"><h2>{len(slides)} slides</h2><button data-close-overlay="true" type="button">Close</button></div><div id="overview-list"></div></section>
-<section id="help-panel" class="deck-overlay" hidden><div class="panel-header"><h2>Presentation controls</h2><button data-close-overlay="true" type="button">Close</button></div><p>Arrow keys: change slides. Home / End: first / last slide. Escape: close a panel.</p><p>Next step advances an example inside a slide. Notes contains explanations, assumptions, and sources. Slides 2–7 give the speculative decoding walkthrough, 8–9 a sampling quiz and its solution, and 10–13 the theory, followed by caching, scheduling, routing, and measurement.</p><p>Print / PDF shows completed step examples and the default illustrative timing case. Use the Slides menu to choose a topic.</p></section>'''
+<section id="help-panel" class="deck-overlay" hidden><div class="panel-header"><h2>Presentation controls</h2><button data-close-overlay="true" type="button">Close</button></div><p>Arrow keys: change slides. Home / End: first / last slide. Escape: close a panel.</p><p>Next step advances an example inside a slide. Notes contains explanations, assumptions, and sources. Slides 2–3 introduce speculative decoding and exact sampling, 4–5 cover KV continuation and cost, 6–7 give a multiple-choice quiz and its solution, and 8–11 develop the theory, followed by caching, scheduling, routing, and measurement.</p><p>Print / PDF shows completed step examples and the default illustrative timing case. Use the Slides menu to choose a topic.</p></section>'''
     js=(ASSETS/'navigation.js').read_text()+'\n'+(ASSETS/'interactions.js').read_text()
     html='<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>LLM serving · Week 4</title><style>'+css+'</style></head><body><main id="viewport" aria-label="Presentation"><div id="stage">'+''.join(parts)+'</div></main>'+chrome+'<script>'+js+'</script></body></html>'
     (ROOT/'week-4-serving.html').write_text(html)
     (ROOT/'week-4-speaker-notes.md').write_text('\n'.join(notes).rstrip()+'\n')
     (ROOT/'.build').mkdir(exist_ok=True)
     (ROOT/'.build/week4-manifest.json').write_text(json.dumps([dict(number=i,title=s['title'],section=s.get('section','')) for i,s in enumerate(slides,1)],indent=2))
-    print(f'Built {len(slides)} Week 4 slides; speculative decoding on slides 2–13 (quiz: 8–9; theory: 10–13).')
+    print(f'Built {len(slides)} Week 4 slides; speculative decoding on slides 2–11 (quiz: 6–7; theory: 8–11).')
 
 if __name__=='__main__':build()

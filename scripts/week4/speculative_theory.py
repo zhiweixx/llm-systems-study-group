@@ -1,34 +1,13 @@
-"""Theory following the six visual speculative-decoding lessons."""
+"""Correctness, acceptance, and performance of speculative decoding."""
 from .common import *
-from .speculative import ACCEPT, REJECT, GREY
+from .speculative import ACCEPT, REJECT
+from .mathml import *
 
 EXACT=('Leviathan et al., App. A.1','https://proceedings.mlr.press/v202/leviathan23a/leviathan23a.pdf')
 CHEN_PROOF=('Chen et al., §4.2','https://arxiv.org/html/2302.01318v1#S4.SS2')
 ANALYSIS=('Leviathan et al., §3','https://proceedings.mlr.press/v202/leviathan23a/leviathan23a.pdf')
 SAMPLING=('Adapted from Leviathan et al., §2.3','https://proceedings.mlr.press/v202/leviathan23a/leviathan23a.pdf')
 
-
-def mathbox(x,y,w,h,formula,size=34):
-    return f'<foreignObject x="{x}" y="{y}" width="{w}" height="{h}"><div xmlns="http://www.w3.org/1999/xhtml" class="theory-math" style="font-size:{size}px"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block">{formula}</math></div></foreignObject>'
-
-
-def mi(s):return f'<mi>{s}</mi>'
-def mn(s):return f'<mn>{s}</mn>'
-def mo(s):return f'<mo>{s}</mo>'
-def row(s):return '<mrow>'+s+'</mrow>'
-def frac(a,b):return '<mfrac>'+row(a)+row(b)+'</mfrac>'
-def sub(a,b):return '<msub>'+mi(a)+row(b)+'</msub>'
-def sup(a,b):return '<msup>'+row(a)+row(b)+'</msup>'
-def par(s):return row(mo('(')+s+mo(')'))
-def f(name,arg='x'):return mi(name)+par(mi(arg))
-def summand(index,term):return '<munder>'+mo('∑')+mi(index)+'</munder>'+term
-
-def finite_sum(index,lower,upper,term):
-    return '<munderover>'+mo('∑')+row(mi(index)+mo('=')+mn(lower))+row(upper)+'</munderover>'+term
-
-def minimum():return '<mi mathvariant="normal">min</mi>'+par(f('p')+mo(',')+f('q'))
-def positive(arg='x'):return '<msub>'+row(mo('[')+f('p',arg)+mo('−')+f('q',arg)+mo(']'))+mo('+')+'</msub>'
-def expectation():return row('<mi mathvariant="normal">E</mi>'+mo('[')+mi('N')+mo(']'))
 
 def expected_tokens(alpha,gamma):
     return sum(alpha**i for i in range(gamma+1))
@@ -38,39 +17,40 @@ def illustrative_speedup(gamma):
 
 
 def sampling_quiz():
-    b=text(75,190,'At one fixed context, p is the target distribution and q is the draft distribution.',29)
-    b+=text(75,230,'We want the final output token Y to follow p. Consider this sampling procedure:',28)
-    b+=code(75,275,735,192,'x ~ q\nAccept x with probability min(1, p(x)/q(x)).\nIf accepted: output Y = x.\nIf rejected: draw Y from r.',25)
-    b+=table(865,272,660,['Token','Draft q','Target p'],[
-        ['sat','0.60','0.20'],['slept','0.20','0.50'],
-        ['ran','0.10','0.20'],['jumped','0.10','0.10'],
-    ],ratios=[.36,.32,.32],row_h=52,size=27)
-    b+=text(75,568,'1. Suppose r = p. Does Y follow p? Use the table to justify your answer.',29)
-    b+=text(75,625,'2. Find a replacement distribution r that produces the correct output distribution.',29)
-    b+=text(75,682,'3. Derive r for arbitrary p and q, and prove correctness. What if p = q?',29)
-    b+=takeaway('Account for both paths: accepted proposals and replacements after rejection.', 'Toy probabilities at a single context. p and q are normalized distributions over the same vocabulary.')
-    return slide('Quiz: What should we sample after a rejection?',b,
-        'Allow approximately 4–5 minutes before showing the numerical solution. This quiz adapts the algorithmic claim in Leviathan et al. Section 2.3 into a derivation exercise; the probabilities are an authored toy example. The target is p and the draft is q. Fix one history throughout: this is not compensation for tokens accepted at earlier positions. Ask participants to track the joint probability of proposing and accepting a token before choosing the replacement distribution. The deliberately incorrect branch r=p yields final probabilities (0.28,0.40,0.18,0.14). A correct replacement has probabilities (0,0.75,0.25,0). The next slide gives numerical accounting and the following slide proves the arbitrary-distribution result. Both distributions are normalized over the same vocabulary after any intended sampling transformations. A proposed token always has q(x)>0, so the acceptance ratio is evaluated only there. If p=q, rejection never occurs and the correction distribution is unnecessary.',[SAMPLING], 'Speculative decoding theory · quiz')
+    b=text(75,190,'Fix one context: p is the target distribution and q is the proposal distribution.',29)
+    b+=code(75,222,1450,155,'Propose X ~ q; accept with probability min(1, p(X)/q(X)).\nIf accepted: output Y = X.\nIf rejected: independently draw Y ~ p.',27)
+    b+=text(75,415,'Let Z = P(reject). Which expression equals P(Y = x) for every p and q?',30,700)
+    b+=text(75,464,'Choose one answer.',25,color=MUTED)
+    choices=[
+        ('A',75,505,f('p')),
+        ('B',75,621,par(mn(1)+mo('−')+mi('Z'))+f('q')+mo('+')+mi('Z')+f('p')),
+        ('C',835,505,minimum()+mo('+')+mi('Z')+f('p')),
+        ('D',835,621,minimum()+mo('+')+mi('Z')+f('q')),
+    ]
+    for label,x,y,formula in choices:
+        b+=text(x,y+47,label+'.',33,700,color=BLUE)
+        b+=mathbox(x+58,y,620,90,formula,34)
+    b+=line(785,495,785,716)
+    b+=takeaway('Select the general identity, even if some options coincide in special cases.', 'Both distributions are normalized over the same vocabulary. Y denotes the final emitted token.')
+    return slide('Quiz: Resampling from the target after rejection',b,
+        'Allow approximately 2–3 minutes for discussion and the immediate solution. There is one universally valid expression, C: Pr(Y=x)=min(p(x),q(x))+Z*p(x), where Z=Pr(reject)=1-sum_x min(p(x),q(x)). The quiz deliberately changes the correct algorithm by sampling the replacement from p. A is the desired target law but not the law of this altered procedure in general. B mistakenly uses q as the conditional law of accepted proposals; accepting with token-dependent probabilities changes that law. C adds the accepted joint mass and the replacement joint mass. D uses q for the replacement, contrary to the stated procedure. Some options can agree for special distributions such as p=q, but C is the identity valid for all p,q. The acceptance ratio is evaluated only for sampled X with q(X)>0. This is an authored assessment based on Leviathan Section 2.3, not a reported company interview question.',[SAMPLING], 'Speculative decoding theory · multiple-choice quiz')
 
 
 def sampling_quiz_solution():
-    b=text(75,190,'For each token: P(propose and accept) = q × min(1, p/q) = min(p, q).',29)
-    b+=text(75,232,'Expected counts in 100 independent draws at the same context:',28,color=MUTED)
-    b+=table(75,266,850,['Token','Target','Accepted','Still needed'],[
-        ['sat','20','20','0'],['slept','50','20','30'],
-        ['ran','20','10','10'],['jumped','10','10','0'],
-    ],ratios=[.24,.23,.25,.28],row_h=57,size=27)
-    b+=line(968,266,968,552)
-    b+=text(1010,300,'40 draws are rejected.',29,700,color=BLUE)
-    b+=lines(1010,355,['If we resample from p:', '40 × 0.20 = 8 more sat tokens.'],25,gap=42)
-    b+=text(1010,461,'Final sat count: 20 + 8 = 28',26,700,color=WARM)
-    b+=text(1010,507,'The target requires only 20.',26)
-    b+=text(75,606,'The 40 replacements must supply 30 slept and 10 ran:',29,700,color=BLUE)
-    b+=text(75,655,'r = (0, 30/40, 10/40, 0) = (0, 0.75, 0.25, 0)',33)
-    b+=text(75,704,'Token order: sat, slept, ran, jumped. The next slide derives the general rule.',25,color=MUTED)
-    b+=takeaway('Accepted outputs + replacements must match the target distribution.', 'These are expected counts, not quotas maintained by the algorithm. The correction is computed from p and q.')
-    return slide('Quiz solution: why resampling from p is biased',b,
-        'The accepted probability vector is min(p,q)=(0.20,0.20,0.10,0.10). Its total is 0.60, so rejection occurs with probability Z=0.40. If the replacement is sampled from p, the emitted vector is min(p,q)+Z*p=(0.28,0.40,0.18,0.14), which differs from p. This is a mixture over alternative outcomes at one fixed history, not a correction for earlier accepted tokens in a sequence. Expected counts across 100 independent draws make the accounting visible; an actual run need not have these exact counts. To reach the target counts (20,50,20,10), the accepted counts (20,20,10,10) need an additional (0,30,10,0). Normalize that missing mass over the 40 rejected draws to obtain r=(0,0.75,0.25,0). Then min(p,q)+Z*r=p for every token. For arbitrary distributions, r(x)=max(p(x)-q(x),0)/Z with Z=sum_y max(p(y)-q(y),0). If p=q then Z=0, every proposal is accepted and the correction branch is never evaluated. The following slide presents the full proof and explains sequence-level exactness.',[SAMPLING,EXACT], 'Speculative decoding theory · quiz solution')
+    b=text(75,190,'Correct answer: C',32,700,color=BLUE)
+    b+=text(75,255,'Accepted proposal',29,700)
+    b+=mathbox(425,212,1090,100,'<mi mathvariant="normal">Pr</mi>'+par(mi('Y')+mo('=')+mi('x')+mo(',')+'<mtext>accept</mtext>')+mo('=')+f('q')+'<mi mathvariant="normal">min</mi>'+par(mn(1)+mo(',')+frac(f('p'),f('q')))+mo('=')+minimum(),33)
+    b+=line(75,323,1525,323)
+    b+=text(75,379,'Replacement',29,700)
+    b+=mathbox(425,338,1090,94,'<mi mathvariant="normal">Pr</mi>'+par(mi('Y')+mo('=')+mi('x')+mo(',')+'<mtext>reject</mtext>')+mo('=')+mi('Z')+f('p'),33)
+    b+=line(75,444,1525,444)
+    b+=mathbox(75,461,1450,100,'<mi mathvariant="normal">Pr</mi>'+par(mi('Y')+mo('=')+mi('x'))+mo('=')+minimum()+mo('+')+mi('Z')+f('p'),39)
+    b+=text(75,601,'B incorrectly assumes that accepted proposals still follow q.',29,700,color=BLUE)
+    b+=text(75,654,'Example: p = (0.20, 0.50, 0.20, 0.10), q = (0.60, 0.20, 0.10, 0.10), Z = 0.40.',27)
+    b+=text(75,705,'The altered algorithm outputs (0.28, 0.40, 0.18, 0.14), which differs from p.',28)
+    b+=takeaway('The residual correction supplies the missing target mass after acceptance.', 'The next slide proves that replacing Zp(x) with [p(x) − q(x)]₊ restores the target distribution.')
+    return slide('Quiz solution: account for both output paths',b,
+        'C follows by summing the joint probabilities of two disjoint events: emitting x from an accepted proposal, and emitting x from the replacement branch. The former is q(x)*min(1,p(x)/q(x))=min(p(x),q(x)); the latter is Z*p(x) because the replacement is an independent draw from p and rejection occurs with probability Z. B is a common misuse of a mixture: the accepted component is not q. For 0<Z<1, its conditional law is min(p,q)/(1-Z). If Z=0 the branch weights are degenerate and the same unconditional expression still applies. The displayed four-token counterexample has accepted mass (0.20,0.20,0.10,0.10), total acceptance 0.60 and rejection 0.40. Adding Z*p gives (0.28,0.40,0.18,0.14), not p. A therefore fails in general; D is the law of a different rule that resamples from q. Correct residual resampling replaces Z*p by max(p-q,0), yielding min(p,q)+max(p-q,0)=p. The following proof derives the residual normalizer. Equal distributions and disjoint-support cases can make several distractors coincide numerically with C; the question explicitly asks for the identity valid for arbitrary distributions.',[SAMPLING,EXACT], 'Speculative decoding theory · quiz solution')
 
 
 def exactness():
@@ -87,12 +67,12 @@ def exactness():
     b+=text(75,716,'Y is the emitted token. If Z = 0, every proposal passes and no correction is needed.',26,color=MUTED)
     b+=takeaway('Repeating this rule at each context preserves the target sequence distribution.', 'This is distributional equality. The same random seed need not produce the same sample sequence.')
     return slide('Why speculative sampling is exact',b,
-        'This proof completes part 3 of the quiz and generalizes its numerical solution. Fix a history and let p and q be normalized target and proposal distributions over a common vocabulary, after any intended sampling transformations. Propose X from q and accept with probability min(1,p(X)/q(X)). For any vocabulary item x, the joint probability of proposing and accepting x is min(p(x),q(x)). Its sum is the total acceptance probability. Since p and q each sum to one, the omitted target mass Z=sum_x max(p(x)-q(x),0) equals the rejection probability 1-sum_x min(p(x),q(x)). On rejection draw Y from r(x)=max(p(x)-q(x),0)/Z. This contributes unconditional mass Z*r(x), exactly filling the missing target mass. Thus min(p,q)+max(p-q,0)=p pointwise. When q(x)=0 the algorithm cannot propose x, so it never evaluates that ratio for such an x; positive target mass there comes through the residual. When Z=0, the rejection branch has zero probability. At successive positions, use the distributions for the actual accepted history and discard the invalid suffix after a rejection. This yields the target autoregressive joint distribution by the chain rule. The proof concerns the ideal probability algorithm; floating-point implementations can differ numerically. Chen uses the opposite p/q naming; this deck consistently uses p for target and q for draft.',[EXACT,CHEN_PROOF], 'Speculative decoding theory · 8–10 min')
+        'This proof completes the correction motivated by the multiple-choice quiz. Fix a history and let p and q be normalized target and proposal distributions over a common vocabulary, after any intended sampling transformations. Propose X from q and accept with probability min(1,p(X)/q(X)). For any vocabulary item x, the joint probability of proposing and accepting x is min(p(x),q(x)). Its sum is the total acceptance probability. Since p and q each sum to one, the omitted target mass Z=sum_x max(p(x)-q(x),0) equals the rejection probability 1-sum_x min(p(x),q(x)). On rejection draw Y from r(x)=max(p(x)-q(x),0)/Z. This contributes unconditional mass Z*r(x), exactly filling the missing target mass. Thus min(p,q)+max(p-q,0)=p pointwise. When q(x)=0 the algorithm cannot propose x, so it never evaluates that ratio for such an x; positive target mass there comes through the residual. When Z=0, the rejection branch has zero probability. At successive positions, use the distributions for the actual accepted history and discard the invalid suffix after a rejection. This yields the target autoregressive joint distribution by the chain rule. The proof concerns the ideal probability algorithm; floating-point implementations can differ numerically. Chen uses the opposite p/q naming; this deck consistently uses p for target and q for draft.',[EXACT,CHEN_PROOF], 'Speculative decoding theory · 8–10 min')
 
 
 def overlap():
     b=text(75,190,'α is the probability that one draft proposal is accepted, at a fixed context.',29)
-    b+=text(75,254,'The same two-token example',30,700,color=BLUE)
+    b+=text(75,254,'A two-token example',30,700,color=BLUE)
     b+=table(75,280,650,['Token','Draft q','Target p','Kept mass'],[
         ['A','0.8','0.6','0.6'],['B','0.2','0.4','0.2'],['Total','1.0','1.0','0.8'],
     ],ratios=[.2,.25,.25,.3],row_h=67,size=27)

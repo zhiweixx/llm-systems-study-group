@@ -12,14 +12,14 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'.build/week4-qa');
  await page.goto('file://'+path.join(root,'week-4-serving.html'));
  const settle=()=>page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));await settle();
  const slides=await page.locator('.slide').evaluateAll(ss=>ss.map(s=>({id:s.id,title:s.dataset.title,section:s.dataset.section})));
- assert.equal(slides.length,36);
- assert.ok(slides.slice(1,13).every(s=>s.section.startsWith('Speculative decoding')));
- assert.ok(slides.slice(7,13).every(s=>s.section.startsWith('Speculative decoding theory')));
- assert.ok(slides[7].title.startsWith('Quiz:'));
- assert.ok(slides[8].title.startsWith('Quiz solution:'));
- assert.ok(slides[9].title.startsWith('Why speculative sampling is exact'));
- assert.ok(slides[20].title.startsWith('Question 1'));
- assert.ok(slides[28].title.startsWith('Question 2'));
+ assert.equal(slides.length,34);
+ assert.ok(slides.slice(1,11).every(s=>s.section.startsWith('Speculative decoding')));
+ assert.ok(slides.slice(5,11).every(s=>s.section.startsWith('Speculative decoding theory')));
+ assert.ok(slides[5].title.startsWith('Quiz:'));
+ assert.ok(slides[6].title.startsWith('Quiz solution:'));
+ assert.ok(slides[7].title.startsWith('Why speculative sampling is exact'));
+ assert.ok(slides[18].title.startsWith('Question 1'));
+ assert.ok(slides[26].title.startsWith('Question 2'));
  const inspect=async label=>{
   const result=await page.locator('.slide:not([hidden])>svg').evaluate(svg=>{
    const visible=e=>{const r=e.getBoundingClientRect();return r.width>0&&r.height>0&&getComputedStyle(e).visibility!=='hidden';};
@@ -61,7 +61,9 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'.build/week4-qa');
    await page.evaluate(k=>window.week4Examples.show(k,0),kind);
   }
  }
- await page.evaluate(()=>window.deck.goTo(6));await settle();
+ const costIndex=slides.findIndex(s=>s.title==='When does the extra work pay off?');
+ assert.equal(costIndex,4);
+ await page.evaluate(n=>window.deck.goTo(n),costIndex);await settle();
  for(const [a,v,expected] of [[0,14,.5],[2,14,1.5],[4,14,2.5],[4,34,1.25],[0,34,.25],[4,10,50/16]]){
   await page.evaluate(([a,v])=>{
    const accepted=document.getElementById('spec-accepted'),verify=document.getElementById('spec-verify');
@@ -73,7 +75,7 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'.build/week4-qa');
   await page.locator('.slide:not([hidden])').screenshot({path:path.join(out,`spec-cost-${a}-${v}.png`)});
  }
  const exampleState=await page.evaluate(()=>window.week4Examples.state());
- assert.equal(exampleState['spec-greedy'].count,5);assert.equal(exampleState['spec-sampling'].count,3);
+ assert.equal(exampleState['spec-greedy'],undefined);assert.equal(exampleState['spec-sampling'],undefined);
  await page.locator('#notes-toggle').click();assert.ok((await page.locator('#notes-content').innerText()).length>100);await page.keyboard.press('Escape');
  await page.locator('#overview-toggle').click();assert.equal(await page.locator('.overview-item').count(),slides.length);await page.keyboard.press('Escape');
  for(const [width,height] of [[1280,770],[1024,650],[768,560]]){
