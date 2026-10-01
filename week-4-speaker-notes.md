@@ -1,10 +1,10 @@
 # Week 4 — Speculative decoding and LLM serving
 
-33 slides, beginning with a two-slide introduction to speculative decoding and its exact sampling algorithm (4–5 minutes), KV continuation and a timing comparison (about 4 minutes), a multiple-choice sampling quiz and its solution (about 3 minutes), and four theory slides (8–10 minutes). The full teaching sequence is approximately 50–55 minutes, plus 15 minutes of discussion. These are planning estimates; choose sections for a 50-minute meeting.
+35 slides, beginning with a two-slide introduction to speculative decoding and its exact sampling algorithm (4–5 minutes), KV continuation and a timing comparison (about 4 minutes), a multiple-choice sampling quiz and its solution (about 3 minutes), and four theory slides (8–10 minutes). The full teaching sequence is approximately 55–65 minutes, plus 15 minutes of discussion. These are planning estimates; choose sections for a 50-minute meeting.
 
-Route: 1 opening; 2–3 speculative decoding and exact sampling; 4–5 KV continuation and cost; 6–7 multiple-choice quiz and solution; 8–11 correctness and performance theory; 12 serving case and request lifecycle; 13–19 prefix reuse and Question 1; 20–27 scheduling, routing, deployment and Question 2; 28–32 measurement; 33 discussion. Questions have immediate solution slides.
+Route: 1 opening; 2–3 speculative decoding and exact sampling; 4–5 KV continuation and cost; 6–7 multiple-choice quiz and solution; 8–11 correctness and performance theory; 12 serving case and request lifecycle; 13–21 agent trajectories, token hit rate, compaction and Question 1; 22–29 scheduling, routing, deployment and Question 2; 30–34 measurement; 35 discussion. Questions have immediate solution slides.
 
-All diagrams and numerical cases are authored teaching examples, not published GPU measurements or verified company interview questions. Primary sources appear on the slides and below. Documentation checked September 28, 2026; benchmark flags should be checked against the installed vLLM version.
+All diagrams and numerical cases are authored teaching examples, not published GPU measurements or verified company interview questions. Primary sources appear on the slides and below. Documentation checked September 30, 2026; benchmark flags should be checked against the installed vLLM version.
 
 The [companion lab](https://zhiweixx.github.io/llm-systems-study-group/week-4/lab.html) includes a dry-run-first request-rate sweep. No GPU benchmark was run to produce these slides. The HTML is self-contained and works offline; reference links need internet.
 
@@ -12,7 +12,7 @@ The [companion lab](https://zhiweixx.github.io/llm-systems-study-group/week-4/la
 
 **Section: Opening**
 
-Open with the two-slide speculative-decoding introduction: the draft–verify mechanism followed by the exact stochastic sampling algorithm. Allow 4–5 minutes for slides 2–3, about 4 minutes for KV continuation and the timing comparison on slides 4–5, and about 3 minutes for the multiple-choice sampling quiz and its solution on slides 6–7. Slides 8–11 develop correctness and performance theory (8–10 minutes): exact sampling, acceptance as distribution overlap, expected tokens per round, and expected speedup. Slide 12 connects the four-GPU serving case to the request lifecycle; 13–19 teach prefix reuse; 20–27 cover scheduling, routing and deployment; 28–32 cover measurement; 33 begins discussion. The full sequence is approximately 50–55 minutes plus 15 minutes of discussion, not a rehearsed duration. Choose later sections if retaining a 50-minute meeting. Numerical cases and diagrams are authored teaching examples, not GPU measurements.
+Open with the two-slide speculative-decoding introduction: the draft–verify mechanism followed by the exact stochastic sampling algorithm. Allow 4–5 minutes for slides 2–3, about 4 minutes for KV continuation and the timing comparison on slides 4–5, and about 3 minutes for the multiple-choice sampling quiz and its solution on slides 6–7. Slides 8–11 develop correctness and performance theory (8–10 minutes): exact sampling, acceptance as distribution overlap, expected tokens per round, and expected speedup. Slide 12 connects the four-GPU serving case to the request lifecycle; 13–21 follow a coding agent through consecutive model calls, hit-rate metrics, compaction and a checkpoint-policy question; 22–29 cover scheduling, routing and deployment; 30–34 cover measurement; 35 begins discussion. The full sequence is approximately 55–65 minutes plus 15 minutes of discussion, not a rehearsed duration. Choose later sections if retaining a 50-minute meeting. Numerical cases and diagrams are authored teaching examples, not GPU measurements.
 
 
 ## 2. Speculative decoding: draft, verify, commit
@@ -105,70 +105,96 @@ Use a stationary fixed-workload approximation and enough generation rounds for a
 
 **Section: Setup · 3 min**
 
-Transition from accelerating one generation to serving many concurrent requests under a fixed GPU budget. Assume one 8B model fits on each GPU at the chosen precision. A replica is a complete model instance, not a tensor-parallel shard; the router selects ONE of the four replicas for a request. Each replica owns its own queue and local KV cache, with no cross-GPU cache sharing in this baseline. Short chats and long documents may reuse system prompts but have different user suffixes. Keep the model, precision and hardware fixed when comparing serving policies. The lower diagram follows one request through the selected engine, including its earlier routing time. This is a logical sequence, not a scale drawing or a promise of one GPU kernel per box. Prefill may be split across engine iterations and interleaved with other requests. Prefix caching can skip a portion of input computation, but routing, queuing, uncached work, and the output-generation path remain. The first token is produced using the prompt processing result; subsequent tokens are generated by decode steps. On completion, release the request’s references and retain reusable prefix blocks if policy allows. For n>1 output tokens, client mean TPOT=(last-token time−first-token time)/(n−1), with streaming event/token conventions stated by the benchmark. Individual ITL samples need not equal the mean. Network buffering can change observed streaming gaps. Define timestamp boundaries before comparing server and client metrics. Later benchmarking slides introduce illustrative latency thresholds; these are not hardware constants.
+Transition from accelerating one generation to serving many concurrent requests under a fixed GPU budget. Assume one 8B model fits on each GPU at the chosen precision. A replica is a complete model instance, not a tensor-parallel shard; the router selects ONE of the four replicas for a request. Each replica owns its own queue and local KV cache, with no cross-GPU cache sharing in this baseline. A long-running agent issues many model calls as its task progresses; repeated transcript prefixes create temporal reuse within that session. Different sessions compete for the same service. Keep the model, precision and hardware fixed when comparing serving policies. The lower diagram follows one request through the selected engine, including its earlier routing time. This is a logical sequence, not a scale drawing or a promise of one GPU kernel per box. Prefill may be split across engine iterations and interleaved with other requests. Prefix caching can skip a portion of input computation, but routing, queuing, uncached work, and the output-generation path remain. The first token is produced using the prompt processing result; subsequent tokens are generated by decode steps. On completion, release the request’s references and retain reusable prefix blocks if policy allows. For n>1 output tokens, client mean TPOT=(last-token time−first-token time)/(n−1), with streaming event/token conventions stated by the benchmark. Individual ITL samples need not equal the mean. Network buffering can change observed streaming gaps. Define timestamp boundaries before comparing server and client metrics. Later benchmarking slides introduce illustrative latency thresholds; these are not hardware constants.
 
 - [vLLM metrics](https://docs.vllm.ai/en/latest/design/metrics/)
 - [Berkeley L18](https://scalable-ai.eecs.berkeley.edu/S2026/assets/lecture_slides/lecture_18.pdf)
 
-## 13. Reuse KV when the causal prefix matches
+## 13. An agent session contains many model calls
 
-**Section: Prefix caching**
+**Section: Agent cache reuse**
 
-Use P and A/B as symbolic token IDs, not words. For the ordinary causal Transformer in our case, reusing a cached block requires the matching preceding token context. The second request can reuse P, then computes B while attending to P. Changing Q1 invalidates this causal-prefix match even though the later text A is identical. Model weights, adapters and relevant input/position settings must also agree. The serving engine validates cache identity; semantic similarity alone is not sufficient. The source describes including the parent-prefix identity and relevant extra inputs in each block key.
+Start with one coding task, not several unrelated users. Each model call returns an action or response; the harness executes tools and sends a new input containing the previous transcript plus new content. Blue marks an earlier input assumed retained by the same model/cache; tan marks material newly supplied in this diagram. The 20k includes the action serialization and test log; the next16k consist of the subsequent model action and returned file excerpts. Each row is one successive model call with the earlier input retained, so its blue region can be reused. At the end, assume the full 40k input is cached. The next slides use this exact snapshot. We conservatively count previous input reuse: whether generated output is immediately reusable as the next input depends on the serving implementation and exact token serialization. Bars show transcript structure, not proportional lengths. This scenario is explicitly supported by the vLLM multiround conversation example and Manus’s append-only agent loop; no prevalence ranking across industry workloads is implied.
 
-- [vLLM prefix-cache design](https://docs.vllm.ai/en/stable/design/prefix_caching/)
+- [Manus: agent context](https://manus.im/blog/Context-Engineering-for-AI-Agents-Lessons-from-Building-Manus)
+- [vLLM: prefix reuse](https://docs.vllm.ai/en/latest/features/automatic_prefix_caching/)
 
-## 14. Share prefix blocks; allocate each unique suffix
+## 14. Hit rate needs a denominator and an explanation
 
-**Section: Prefix caching**
+**Section: Agent cache reuse**
 
-Step through the arrival of A, B, then C at the same replica. All three prompt KV states remain retained; no decoding or eviction occurs in this toy. Each suffix differs at its first token, so only the first block matches. The request block tables refer to physical block IDs. The three arrows terminate at the same physical P: there are not three copies of its KV. At the last step we have four physical blocks: P, A, B and C. Each represents four token positions across the model’s KV state. The block size of four is a teaching choice. Real cache managers handle partial blocks and boundaries; this example aligns all blocks to avoid that complication.
+Here H is cached input tokens divided by total input tokens for one model call, not a hardware L1/L2 hit rate and not a request-level Boolean. U counts fresh input positions, not bytes read from HBM or equal-cost units of GPU time. The two rows are alternative next calls after the same 40k snapshot; if those two calls are included in a reporting window, the aggregate ratio is 80/102=78.43%, whereas averaging their percentages gives about80.95%. Both requests have some cache reuse, so an any-hit request metric would report100% and conceal the difference. vLLM exposes queried/hit-token counters; for a specific engine verify which eligible tokens and boundaries its denominator covers. Provider usage fields can separate uncached tokens, cache creation and cache reads: reconstruct total input according to that provider rather than dividing by an uncached-only field. At fixed model/configuration, cache residency and complete-block alignment are assumed for these illustrative counts.
 
-- [PagedAttention paper](https://arxiv.org/abs/2309.06180)
-- [vLLM prefix-cache design](https://docs.vllm.ai/en/stable/design/prefix_caching/)
+- [vLLM: cache metrics](https://docs.vllm.ai/en/latest/design/metrics/#prefix-cache-metrics)
+- [vLLM: prefix reuse](https://docs.vllm.ai/en/latest/features/automatic_prefix_caching/)
 
-## 15. A finished request does not require deleting its KV
+## 15. Editing the past moves the cache-reuse boundary
 
-**Section: Prefix caching**
+**Section: Agent cache reuse**
 
-The reference count records how many current requests depend on a block. Finishing a request removes its reference. When the count reaches zero, the manager may retain the computed contents as a cache candidate while making the slot reclaimable. A hit reactivates the block. Reassigning the slot invalidates the old cached mapping before new data overwrites it. This is a logical lifecycle within a preallocated memory pool, not necessarily a GPU allocation/free event. In vLLM V1, an idle cached block can already belong to the free-block queue: free for allocation does not mean its old contents have been erased. Avoid interpreting a high allocated-HBM number as entirely non-reclaimable active KV.
+This is selective compaction of an old test interaction (the action and its tool result), not a requirement that all compaction systems use this exact format. Ordinary exact-prefix reuse is the assumption. The first summary token differs from the old action/log range, so only the fixed4k prefix matches. At the first Transformer layer, token embeddings may not yet mix all previous context, but the full multilayer KV state of the unchanged later text generally depends on the changed earlier context; positions may also shift when20k becomes2k. Thus neither textual identity of the later messages nor retaining their old cache blocks makes those blocks valid for this new request. Model weights, adapters, token serialization and relevant position/input settings must also agree. Engines use parent-prefix identities in cache keys; full-block boundaries may round the reusable prefix down. The old branch can remain valid for the original transcript. Figure widths are schematic; the next slide uses a proportional token scale. Tool-result clearing can use a placeholder rather than a generated summary; both change past tokens. Full-history compaction may replace a larger range and move the boundary differently.
 
-- [vLLM prefix-cache design](https://docs.vllm.ai/en/stable/design/prefix_caching/)
+- [vLLM: cache identity](https://docs.vllm.ai/en/latest/design/prefix_caching/)
+- [Anthropic: context editing](https://platform.claude.com/docs/en/build-with-claude/context-editing#context-editing-and-prompt-caching)
 
-## 16. Cache hit rate and KV occupancy answer different questions
+## 16. Compaction causes a rebuild, then reuse recovers
 
-**Section: Prefix caching**
+**Section: Agent cache reuse**
 
-The token-hit fraction answers what portion of the arriving prompt tokens used existing KV in this explicitly defined three-request window. The request fraction answers whether a request reused anything, even a short prefix. Physical occupancy is a snapshot of unique retained KV blocks, rather than a traffic ratio. Our arithmetic follows directly from the preceding diagram: the cold request needs eight token positions, and each of the next two contributes four new ones. The cache saves eight recomputed positions across these arrivals. This toy counts prompt KV only, with no output growth, eviction, duplication or partial-block waste. Production counters can use different eligibility and boundary conventions; verify the engine metric before comparing systems.
+Advance through retain, compact, and the next append. Starting cached input is4k fixed prefix+20k old test interaction+16k later history=40k. Keeping it and appending2k requires42k total input with40k reused and2k newly prefilling. Replacing the old20k test interaction by a2k summary gives24k input: only4k match, so20k must be newly computed. After this edited input is processed and cached, another2k append gives26k input,24k reused and2k uncached. This last suffix includes the previous generated action and new observation under our conservative previous-input convention. The first two rows are alternatives at the same point, not two sequential executions; the third follows the second. Treat cache residency, eligibility, compatible model settings and stable exact serialization as assumptions. Counts idealize block rounding and any final-token recomputation. Summary generation is a separate cost and is not included in these token numbers. The bars show input positions, not GPU memory traffic, elapsed time or retained physical cache allocation. A rebuilt shorter active history can reduce subsequent attention and active KV needs, even though old unused cached blocks may remain in the pool until eviction.
 
-- [PagedAttention paper](https://arxiv.org/abs/2309.06180)
-- [vLLM prefix-cache design](https://docs.vllm.ai/en/stable/design/prefix_caching/)
+- [Anthropic: context editing](https://platform.claude.com/docs/en/build-with-claude/context-editing#context-editing-and-prompt-caching)
+- [vLLM: prefix reuse](https://docs.vllm.ai/en/latest/features/automatic_prefix_caching/)
 
-## 17. What a prefix hit saves—and what remains
+## 17. Will future savings repay the cache rebuild?
 
-**Section: Prefix caching**
+**Section: Agent cache reuse**
 
-The direct algorithmic saving is the repeated prefill computation for the reused prefix. The uncached suffix still traverses the model, including attention to previous keys and values. During autoregressive generation, each new query also attends to its valid history, including the cached prefix. Cache sharing changes where the history is stored and how many copies exist; it does not make the attention dependencies disappear. Less prefill demand can indirectly alter queueing and available capacity, so observed end-to-end effects depend on workload and scheduling. Do not predict that a 50% token-hit fraction will halve TTFT, per-token latency, or total request latency.
+The additional latency R is the difference between compact-now and keep-history at this point, including any separate summary generation and extra main-model prompt processing. It is not all of the compacted call’s latency. If n subsequent comparable calls each save about s time, the net task-time change is approximately R−n*s. U new query positions each attend to C cached keys in ordinary full causal attention, giving U*C cross-prefix query-key pairs per head and layer; attention within the new suffix adds further work. This is a local planning model, not a universal latency law: future queries, output lengths, cache residency, batching and queueing can change s. Use the sum of per-call savings if it is not approximately constant. Even with a100% prefix hit, suffix and decode attention still read existing K/V. Shortening the history reduces that work and the number of active KV positions required, while the allocator may retain old evictable cache blocks. Provider billing can also charge cached-input reads, but use actual provider rates and cache-write charges for a money objective; no pricing is assumed here. The policy must also preserve correctness and task-relevant constraints. Use matched workload replay for system costs and real end-to-end task evaluation for quality and changed behavior. A hard context-window or capacity constraint can force compaction regardless of the latency break-even.
 
-- [vLLM prefix caching](https://docs.vllm.ai/en/latest/features/automatic_prefix_caching/)
+- [vLLM: prefix reuse](https://docs.vllm.ai/en/latest/features/automatic_prefix_caching/)
+- [Anthropic: context editing](https://platform.claude.com/docs/en/build-with-claude/context-editing#context-editing-and-prompt-caching)
+- [Berkeley L21, pp. 35–39](https://scalable-ai.eecs.berkeley.edu/S2026/assets/lecture_slides/lecture_21.pdf#page=35)
 
-## 18. Question 1: more cache hits, worse p95 TTFT
+## 18. Design the transcript to support both reuse and reasoning
+
+**Section: Agent cache reuse**
+
+This is an authored policy sketch for a coding agent, informed by Berkeley’s long-context packing/checkpoint discussion and Manus’s restorable external memory. It is not a claim that every framework uses this policy. Before a new tool response first enters the model input, persist the full raw log and expose a useful bounded view with retrieval references. This reduces fresh input without changing old cached tokens. Selecting what to omit can lose essential evidence; record failures and exact paths or line ranges needed to recover it. Later compaction changes history and pays the previously explained rebuild cost. Preserve task constraints, current state, rejected hypotheses and unresolved errors so that the agent does not repeat failed work. A stable checkpoint followed by append-only updates permits reuse between checkpoints; repeatedly rewriting that checkpoint does not. Tool-result clearing often replaces selected old results by placeholders, whereas summarization synthesizes a replacement state and may cover much more history. Both are context policies rather than KV-cache eviction policies. A context-token threshold and retaining the most recent N tool calls are separate controls; neither establishes an industry-wide every-N-turns rule.
+
+- [Berkeley L21, pp. 35–39](https://scalable-ai.eecs.berkeley.edu/S2026/assets/lecture_slides/lecture_21.pdf#page=35)
+- [Manus: agent context](https://manus.im/blog/Context-Engineering-for-AI-Agents-Lessons-from-Building-Manus)
+- [Anthropic: context editing](https://platform.claude.com/docs/en/build-with-claude/context-editing#context-editing-and-prompt-caching)
+
+## 19. Three different mechanisms can lower cache hit rate
+
+**Section: Agent cache reuse**
+
+The first row is a denominator effect plus real extra fresh work, not a failure of old-prefix retention. The second is a cache-identity change; inspect serialized model input rather than only the user-visible chat, because tool definitions, timestamps, formatting or hidden context transformations can alter token prefixes. The third concerns availability: a different worker may have no local copy, memory pressure can evict it, or a provider cache can expire. Relevant model/configuration changes can also prevent reuse even if visible text matches, so hold those fixed before interpreting the third row. On a self-hosted engine record request IDs and replica/cache metrics; on a managed API use exposed cache-usage fields and accessible client timing without pretending to observe hidden server queue or prefill timings. Cache IDs/hashes can locate differences without logging sensitive raw content. For a changed agent policy, compare the same tasks and report both token-weighted hit rate and total uncached positions, queue delay, TTFT, end-to-end task time and success. Caching can interact with routing and load; the later serving section addresses those effects.
+
+- [vLLM: cache identity](https://docs.vllm.ai/en/latest/design/prefix_caching/)
+- [vLLM: cache metrics](https://docs.vllm.ai/en/latest/design/metrics/#prefix-cache-metrics)
+- [Anthropic: context editing](https://platform.claude.com/docs/en/build-with-claude/context-editing#context-editing-and-prompt-caching)
+
+## 20. Question 1: refresh the summary after every tool call?
 
 **Section: Question 1**
 
-Give the group about one minute to reason before showing the solution. These values are authored illustrative observations, not an experiment from SGLang or vLLM, and not an attributed company interview question. A and B are two eligible replicas in our four-GPU deployment; compare them for this next request while holding other overhead equal. The per-request queue and prefill estimates should not be added to global p95 values: quantiles do not add in general. The exercise asks for a causal hypothesis, a routing choice and a controlled experiment, rather than merely reciting that cache is good. The token-hit counter rose, but it measures one kind of saved work rather than user waiting time.
+Allow the audience to reason about a realistic harness design, not guess a cache formula. Both candidate prompts are24k because the summary remains2k and all other text is unchanged. The summary in policy A starts with a different first token; otherwise the reuse boundary could extend into the summary. The newly appended2k include the preceding model action and the latest tool observation, under the conservative previous-input convention. Policy B is a decision not to refresh on this call, not a policy never to compact. The cached22k input is4k system/tools+2k existing summary+16k recent history. Ask first for reused and uncached token counts, then for the tradeoff and measurement strategy. Do not infer latency directly from token counts. This is an authored systems-design question motivated by the documented cache interaction, not a verified interview question attributed to a company.
 
-- [SGLang cache-aware routing](https://github.com/sgl-project/sglang/blob/main/sgl-model-gateway/src/policies/cache_aware.rs)
+- [vLLM: cache identity](https://docs.vllm.ai/en/latest/design/prefix_caching/)
+- [Anthropic: context editing](https://platform.claude.com/docs/en/build-with-claude/context-editing#context-editing-and-prompt-caching)
 
-## 19. Solution 1: saved work must outweigh additional waiting
+## 21. Solution 1: the summary’s location makes every edit costly
 
 **Section: Question 1 solution**
 
-B is preferred under the stated estimates: a cache miss with a short wait can finish prefill earlier than a cache hit behind a long queue. The service-wide p95 observation alone would not prove this mechanism; request-level traces and per-replica queue measurements supply the missing evidence. Replay the identical offered workload, retain the same GPU budget and model, and compare policies. Account for cache warmness consistently and include failures and completed throughput. A load-aware policy could stop following prefix affinity when a replica becomes too busy, or distribute hot prefixes across additional replicas at the cost of duplicated KV. The exact scoring or threshold should be measured rather than asserted as universally optimal.
+Policy A’s reusable prefix ends at the first changed token after the initial4k; everything thereafter is uncached:2k updated summary+16k recent history+2k new material=20k. Policy B retains the full22k earlier input and processes only2k new. This comparison isolates prefix identity at equal prompt length. It does not prove that B is always faster or that summary updates are undesirable; an updated summary can improve reasoning, make future compaction effective, or be necessary to fit a context budget. Measure time spent generating the summary separately from main-model processing and queueing. Replay recorded inputs under identical model, hardware, cache warmness/residency, arrival conditions and output-length controls to isolate system costs. Then evaluate complete tasks with each policy: a replay fixes the trajectory and cannot reveal changed reasoning, forgotten constraints or repeated retrieval. Use confidence intervals across tasks rather than a single convenient prompt. The break-even approximation on the earlier slide is a guide to planning measurements, not a universal cadence. Transition back to service-level scheduling: all these calls now compete with other sessions for the same replicas.
 
-- [SGLang cache-aware routing](https://github.com/sgl-project/sglang/blob/main/sgl-model-gateway/src/policies/cache_aware.rs)
+- [Anthropic: context editing](https://platform.claude.com/docs/en/build-with-claude/context-editing#context-editing-and-prompt-caching)
+- [Berkeley L21, pp. 35–39](https://scalable-ai.eecs.berkeley.edu/S2026/assets/lecture_slides/lecture_21.pdf#page=35)
 
-## 20. Queues grow when arrivals outrun completions
+## 22. Queues grow when arrivals outrun completions
 
 **Section: Scheduling**
 
@@ -176,7 +202,7 @@ The numbers are a teaching construction, not a GPU benchmark. Count complete req
 
 - [Orca, OSDI 2022](https://www.usenix.org/conference/osdi22/presentation/yu)
 
-## 21. Three budgets constrain each scheduling round
+## 23. Three budgets constrain each scheduling round
 
 **Section: Scheduling**
 
@@ -185,7 +211,7 @@ Use the same four-GPU service, but zoom into the scheduler on one replica. The f
 - [vLLM: scheduler tuning](https://docs.vllm.ai/en/latest/configuration/optimization/)
 - [Orca, OSDI 2022](https://www.usenix.org/conference/osdi22/presentation/yu)
 
-## 22. Chunking controls how much a new prompt interrupts chat
+## 24. Chunking controls how much a new prompt interrupts chat
 
 **Section: Scheduling**
 
@@ -194,7 +220,7 @@ Click Next step three times. At the start, four existing chat requests are decod
 - [vLLM: scheduler tuning](https://docs.vllm.ai/en/latest/configuration/optimization/)
 - [Sarathi-Serve, OSDI 2024](https://arxiv.org/abs/2403.02310)
 
-## 23. Admission must consider future KV growth
+## 25. Admission must consider future KV growth
 
 **Section: Scheduling**
 
@@ -202,7 +228,7 @@ Active, retained and empty describe block-content states; retained blocks may al
 
 - [vLLM: scheduler tuning](https://docs.vllm.ai/en/latest/configuration/optimization/)
 
-## 24. Routing balances prefix reuse against local load
+## 26. Routing balances prefix reuse against local load
 
 **Section: Deployment**
 
@@ -210,7 +236,7 @@ These four boxes are the four one-GPU replicas from the case study. All hold the
 
 - [SGLang: cache-aware routing](https://github.com/sgl-project/sglang/blob/main/sgl-model-gateway/src/policies/cache_aware.rs)
 
-## 25. Compare shared and separate prefill/decode pools
+## 27. Compare shared and separate prefill/decode pools
 
 **Section: Deployment**
 
@@ -219,7 +245,7 @@ Week 2 introduced prefill–decode disaggregation. Here the new issue is resourc
 - [DistServe, OSDI 2024](https://www.usenix.org/conference/osdi24/presentation/zhong-yinmin)
 - [vLLM: disaggregated prefill](https://docs.vllm.ai/en/latest/features/disagg_prefill/)
 
-## 26. Question 2: Why do chat streams stall on long prompts?
+## 28. Question 2: Why do chat streams stall on long prompts?
 
 **Section: Questions**
 
@@ -228,7 +254,7 @@ This is an authored interview-style problem, not a question attributed to a part
 - [Sarathi-Serve, OSDI 2024](https://arxiv.org/abs/2403.02310)
 - [DistServe, OSDI 2024](https://www.usenix.org/conference/osdi24/presentation/zhong-yinmin)
 
-## 27. Solution 2: Attribute the delay before changing deployment
+## 29. Solution 2: Attribute the delay before changing deployment
 
 **Section: Questions**
 
@@ -237,7 +263,7 @@ First separate the duration of GPU kernels from the time between outputs seen by
 - [Sarathi-Serve, OSDI 2024](https://arxiv.org/abs/2403.02310)
 - [DistServe, OSDI 2024](https://www.usenix.org/conference/osdi24/presentation/zhong-yinmin)
 
-## 28. Design the experiment before choosing the winner
+## 30. Design the experiment before choosing the winner
 
 **Section: Benchmarking · 7 min**
 
@@ -245,7 +271,7 @@ Replay identical request content and arrival patterns, ideally in several random
 
 - [vLLM benchmark CLI](https://docs.vllm.ai/en/latest/cli/bench/serve/)
 
-## 29. Request rate and concurrency are different controls
+## 31. Request rate and concurrency are different controls
 
 **Section: Benchmarking · 7 min**
 
@@ -253,7 +279,7 @@ The left is a closed-loop client. Its achieved request rate drops automatically 
 
 - [vLLM benchmark CLI](https://docs.vllm.ai/en/latest/cli/bench/serve/)
 
-## 30. More throughput can still violate the service target
+## 32. More throughput can still violate the service target
 
 **Section: Benchmarking · 7 min**
 
@@ -262,7 +288,7 @@ These values are authored for interpretation, not fitted or measured. Assume sta
 - [DistServe §2–3](https://www.usenix.org/system/files/osdi24-zhong-yinmin.pdf)
 - [vLLM benchmark CLI](https://docs.vllm.ai/en/latest/cli/bench/serve/)
 
-## 31. Connect a bad user metric to an engine cause
+## 33. Connect a bad user metric to an engine cause
 
 **Section: Benchmarking · 7 min**
 
@@ -271,7 +297,7 @@ Each row is a hypothesis test, not a lookup table guaranteeing the cause. For ex
 - [vLLM metrics](https://docs.vllm.ai/en/latest/design/metrics/)
 - [DistServe §2–3](https://www.usenix.org/system/files/osdi24-zhong-yinmin.pdf)
 
-## 32. A reproducible serving experiment
+## 34. A reproducible serving experiment
 
 **Section: Benchmarking · 7 min**
 
@@ -280,7 +306,7 @@ Optional work after the meeting. The script requires a working endpoint and a co
 - [Companion lab](https://zhiweixx.github.io/llm-systems-study-group/week-4/lab.html)
 - [vLLM benchmark CLI](https://docs.vllm.ai/en/latest/cli/bench/serve/)
 
-## 33. Discussion: defend a serving decision with evidence
+## 35. Discussion: defend a serving decision with evidence
 
 **Section: Discussion · 15 min**
 
