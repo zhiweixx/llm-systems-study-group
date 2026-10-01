@@ -11,9 +11,9 @@ def get_slides():
         x=75+i*500
         body+=line(x,486,x+440,486)+text(x,536,a,32,700,color=BLUE)+text(x,579,b,29)
     body+=text(75,682,'Speculative decoding: the algorithm, a sampling quiz, and correctness and performance theory.',28,color=MUTED)
-    body+=takeaway('Goal: reduce generation time while meeting explicit service latency targets.', '29 slides · speculative decoding, agent caching, and a worked multi-node deployment.')
+    body+=takeaway('Goal: reduce generation time while meeting explicit service latency targets.', '30 slides · hardware bandwidth, speculative decoding, agent caching, and multi-node deployment.')
     out=[slide('Week 4 · From model execution to an online service',body,
-        'Slides 2–11 cover speculative decoding, exact sampling, a multiple-choice quiz and theory. Slide 12 introduces a small serving example; slides 13–16 explain agent context and prefix-cache reuse. Slides 17–29 introduce a separate 405B deployment on eight 8-H100 servers: storage, TP/PP, KV capacity, latency versus throughput, context parallelism and precision choices. This is expanded teaching material; select a route for the available meeting time. Numerical deployment estimates are analytical and were not GPU-benchmarked.',section='Opening')]
+        'Slide 2 compares hardware bandwidths. Slides 3–12 cover speculative decoding, exact sampling, a multiple-choice quiz and theory. Slide 13 introduces a small serving example; slides 14–17 explain agent context and prefix-cache reuse. Slides 18–30 introduce a separate 405B deployment on eight 8-H100 servers: storage, TP/PP, KV capacity, latency versus throughput, context parallelism and precision choices. This is expanded teaching material; select a route for the available meeting time. Numerical deployment estimates are analytical and were not GPU-benchmarked.',section='Opening')]
     body=text(75,199,'Example: four GPUs, each hosting a complete 8B model; chat and agent model calls.',30)
     body+=label_box(75,291,185,78,'Requests',size=29)+arrow(260,330,300,330)
     body+=rect(300,285,210,90,PALE)+text(405,319,'Router',28,700,anchor='middle')

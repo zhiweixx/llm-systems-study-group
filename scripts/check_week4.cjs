@@ -12,15 +12,16 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'.build/week4-qa');
  await page.goto('file://'+path.join(root,'week-4-serving.html'));
  const settle=()=>page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));await settle();
  const slides=await page.locator('.slide').evaluateAll(ss=>ss.map(s=>({id:s.id,title:s.dataset.title,section:s.dataset.section})));
- assert.equal(slides.length,29);
- assert.ok(slides.slice(1,11).every(s=>s.section.startsWith('Speculative decoding')));
- assert.ok(slides.slice(5,11).every(s=>s.section.startsWith('Speculative decoding theory')));
- assert.ok(slides[5].title.startsWith('Quiz:'));
- assert.ok(slides[6].title.startsWith('Quiz solution:'));
- assert.ok(slides[7].title.startsWith('Why speculative sampling is exact'));
- assert.equal(slides[16].title,'Serve a 405B model on eight H100 nodes');
- assert.ok(slides.slice(16).every(s=>s.section.startsWith('Case study')));
- assert.equal(slides[28].title,'Which layout would we actually choose?');
+ assert.equal(slides.length,30);
+ assert.equal(slides[1].title,'Bandwidth: on-chip memory, HBM and GPU links');
+ assert.ok(slides.slice(2,12).every(s=>s.section.startsWith('Speculative decoding')));
+ assert.ok(slides.slice(6,12).every(s=>s.section.startsWith('Speculative decoding theory')));
+ assert.ok(slides[6].title.startsWith('Quiz:'));
+ assert.ok(slides[7].title.startsWith('Quiz solution:'));
+ assert.ok(slides[8].title.startsWith('Why speculative sampling is exact'));
+ assert.equal(slides[17].title,'Serve a 405B model on eight H100 nodes');
+ assert.ok(slides.slice(17).every(s=>s.section.startsWith('Case study')));
+ assert.equal(slides[29].title,'Which layout would we actually choose?');
  const inspect=async label=>{
   const result=await page.locator('.slide:not([hidden])>svg').evaluate(svg=>{
    const visible=e=>{const r=e.getBoundingClientRect();return r.width>0&&r.height>0&&getComputedStyle(e).visibility!=='hidden';};
@@ -63,7 +64,7 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'.build/week4-qa');
   }
  }
  const costIndex=slides.findIndex(s=>s.title==='When does the extra work pay off?');
- assert.equal(costIndex,4);
+ assert.equal(costIndex,5);
  await page.evaluate(n=>window.deck.goTo(n),costIndex);await settle();
  for(const [a,v,expected] of [[0,14,.5],[2,14,1.5],[4,14,2.5],[4,34,1.25],[0,34,.25],[4,10,50/16]]){
   await page.evaluate(([a,v])=>{

@@ -62,8 +62,8 @@
 <section aria-labelledby="week4">
   <div class="section-heading"><h2 id="week4">Week 4: LLM serving</h2></div>
   <p>Start with speculative decoding and its sampling theory, then follow cache reuse across model calls within one coding-agent session. Apply Week 3's sharding methods to serving Llama 3.1 405B on eight nodes with eight H100 GPUs each: 64 GPUs in total. Compare memory capacity, tensor and pipeline parallelism, context sharding, and the tradeoffs between latency and throughput.</p>
-  <p class="presentation-link"><a href="week-4/slides.html#slide-1">Present slides</a><span>29 slides · expanded teaching deck</span></p>
-  <p class="muted"><a href="week-4/slides.html#slide-2">Slides 2–3 introduce speculative decoding and exact sampling</a>, followed by KV continuation and an interactive timing comparison (4–5). <a href="week-4/slides.html#slide-6">Slides 6–7 pose a multiple-choice sampling quiz and explain the solution</a>. <a href="week-4/slides.html#slide-8">Slides 8–11 develop the theory</a>: exact sampling, distribution overlap, expected tokens per round, and the speedup tradeoff. The request lifecycle (12) leads to <a href="week-4/slides.html#slide-13">agent cache reuse (13–16)</a> and an <a href="week-4/slides.html#slide-16">interactive compaction example</a>. <a href="week-4/slides.html#slide-17">Slides 17–29 develop the 405B serving case</a>, from fitting the model to choosing and testing a deployment. There is no fixed presentation duration; choose sections for the meeting. All diagrams and controls work in the offline HTML.</p>
+  <p class="presentation-link"><a href="week-4/slides.html#slide-1">Present slides</a><span>30 slides · expanded teaching deck</span></p>
+  <p class="muted"><a href="week-4/slides.html#slide-2">Slide 2 compares H100, H200, and B200 memory and interconnect bandwidth</a>, distinguishing specifications, measurements, and estimates. <a href="week-4/slides.html#slide-3">Slides 3–4 introduce speculative decoding and exact sampling</a>, followed by KV continuation and an interactive timing comparison (5–6). <a href="week-4/slides.html#slide-7">Slides 7–8 pose a multiple-choice sampling quiz and explain the solution</a>. <a href="week-4/slides.html#slide-9">Slides 9–12 develop the theory</a>: exact sampling, distribution overlap, expected tokens per round, and the speedup tradeoff. The request lifecycle (13) leads to <a href="week-4/slides.html#slide-14">agent cache reuse (14–17)</a> and an <a href="week-4/slides.html#slide-17">interactive compaction example</a>. <a href="week-4/slides.html#slide-18">Slides 18–30 develop the 405B serving case</a>, from fitting the model to choosing and testing a deployment. There is no fixed presentation duration; choose sections for the meeting. All diagrams and controls work in the offline HTML.</p>
   <dl class="materials">
     <div><dt><a href="week-4/speaker-notes.html">Speaker notes</a></dt><dd>Teaching sequence, assumptions, discussion guidance, and primary sources.</dd></div>
     <div><dt><a href="week-4/lab.html">Optional serving benchmark lab</a></dt><dd>A separate vLLM measurement exercise with request-rate sweeps, cold/warm cache controls, and latency objectives.</dd></div>
@@ -71,9 +71,9 @@
   </dl>
   <h3>Case study discussions</h3>
   <ol class="question-list">
-    <li><a href="week-4/slides.html#slide-22">TP8 × PP2 or TP16?</a><span>Compare weight and KV ownership, communication, and the effect of replicated KV heads.</span></li>
-    <li><a href="week-4/slides.html#slide-23">What does pipeline parallelism do to token latency?</a><span>Follow one request through the stages, then distinguish its latency from the throughput of independent requests.</span></li>
-    <li><a href="week-4/slides.html#slide-29">Which layout would you deploy?</a><span>Choose a candidate from the workload, memory budget, precision, and measurements needed to validate it.</span></li>
+    <li><a href="week-4/slides.html#slide-23">TP8 × PP2 or TP16?</a><span>Compare weight and KV ownership, communication, and the effect of replicated KV heads.</span></li>
+    <li><a href="week-4/slides.html#slide-24">What does pipeline parallelism do to token latency?</a><span>Follow one request through the stages, then distinguish its latency from the throughput of independent requests.</span></li>
+    <li><a href="week-4/slides.html#slide-30">Which layout would you deploy?</a><span>Choose a candidate from the workload, memory budget, precision, and measurements needed to validate it.</span></li>
   </ol>
   <p class="muted">The case uses analytical estimates with stated assumptions, not newly measured GPU results. The optional lab produces data only when run against a real server.</p>
 </section>

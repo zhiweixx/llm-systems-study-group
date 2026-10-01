@@ -1,12 +1,12 @@
 # Week 4 — Speculative decoding and LLM serving
 
-29 slides. Slides 1–16 retain the speculative-decoding and agent-cache lessons. Slides 17–29 replace the former closing sections with a worked Llama 3.1 405B serving case. Hardware assumption: eight servers, each with eight H100 SXM 80 GB GPUs, for 64 GPUs total.
+30 slides. Slide 2 compares hardware bandwidths. Slides 3–17 cover speculative decoding and agent caching. Slides 18–30 develop a worked Llama 3.1 405B serving case. Hardware assumption for that case: eight servers, each with eight H100 SXM 80 GB GPUs, for 64 GPUs total.
 
-Route: 2–3 speculative decoding and exact sampling; 4–5 KV continuation and cost; 6–7 sampling quiz and solution; 8–11 correctness and performance theory; 12 request lifecycle; 13–16 agent context and compaction. The 405B case then covers fit (18), replica placement (19), TP ownership (20), KV budget (21), TP16 (22), PP timing (23), decode/prefill costs (24–25), context parallelism (26), FP8 (27), configuration (28), and deployment choice (29).
+Route: 2 hardware bandwidth; 3–4 speculative decoding and exact sampling; 5–6 KV continuation and cost; 7–8 sampling quiz and solution; 9–12 correctness and performance theory; 13 request lifecycle; 14–17 agent context and compaction. The 405B case then covers fit (19), replica placement (20), TP ownership (21), KV budget (22), TP16 (23), PP timing (24), decode/prefill costs (25–26), context parallelism (27), FP8 (28), configuration (29), and deployment choice (30).
 
-This is an expanded teaching deck. Select a route for the meeting rather than treating the page count as a rehearsed duration. The first 16 slides and the 405B case can also be presented as separate sections.
+This is an expanded teaching deck. Select a route for the meeting rather than treating the page count as a rehearsed duration. The first 17 slides and the 405B case can also be presented as separate sections.
 
-Diagrams and numerical estimates are authored teaching examples, not GPU measurements. The applied-inference chapter supplies a worked-problem structure; all 405B calculations are rederived from primary model/hardware sources and distinguish one-request latency from pipelined throughput. Versioned vLLM documentation is 0.19.1; verify the selected backend and installed version.
+The slide 2 chart distinguishes cited hardware specifications, published cache measurements, and architectural estimates. Other diagrams and numerical estimates are authored teaching examples, not GPU measurements. The applied-inference chapter supplies a worked-problem structure; all 405B calculations are rederived from primary model/hardware sources and distinguish one-request latency from pipelined throughput. Versioned vLLM documentation is 0.19.1; verify the selected backend and installed version.
 
 The optional [serving lab](https://zhiweixx.github.io/llm-systems-study-group/week-4/lab.html) remains available separately. No GPU benchmark or cluster deployment was run to produce these slides. The HTML works offline; reference links need internet.
 
@@ -14,10 +14,26 @@ The optional [serving lab](https://zhiweixx.github.io/llm-systems-study-group/we
 
 **Section: Opening**
 
-Slides 2–11 cover speculative decoding, exact sampling, a multiple-choice quiz and theory. Slide 12 introduces a small serving example; slides 13–16 explain agent context and prefix-cache reuse. Slides 17–29 introduce a separate 405B deployment on eight 8-H100 servers: storage, TP/PP, KV capacity, latency versus throughput, context parallelism and precision choices. This is expanded teaching material; select a route for the available meeting time. Numerical deployment estimates are analytical and were not GPU-benchmarked.
+Slide 2 compares hardware bandwidths. Slides 3–12 cover speculative decoding, exact sampling, a multiple-choice quiz and theory. Slide 13 introduces a small serving example; slides 14–17 explain agent context and prefix-cache reuse. Slides 18–30 introduce a separate 405B deployment on eight 8-H100 servers: storage, TP/PP, KV capacity, latency versus throughput, context parallelism and precision choices. This is expanded teaching material; select a route for the available meeting time. Numerical deployment estimates are analytical and were not GPU-benchmarked.
 
 
-## 2. Speculative decoding: draft, verify, commit
+## 2. Bandwidth: on-chip memory, HBM and GPU links
+
+**Section: Hardware bandwidth**
+
+This chart compares bandwidth scales, not latency. It is an original chart of published specifications, published microbenchmarks, and explicitly stated architectural estimates; we ran no GPU benchmark. The horizontal axis is logarithmic and all plotted values are decimal TB/s (1 TB/s = 1,000 GB/s). H100 and H200 mean SXM, and the networking reference is an eight-GPU DGX configuration. The entire set of NVLink interfaces on one GPU supplies 900/900/1,800 GB/s bidirectionally for H100/H200/B200. The plotted one-way rates are therefore 450/450/900 GB/s, not per-link rates or independent simultaneous bandwidth to every peer. HBM is 3.35/4.8/up to 8 TB/s per GPU. Do not double HBM bandwidth as if it were a full-duplex network interface. InfiniBand is a server configuration rather than a fixed GPU property. These DGX systems have eight 400 Gb/s ConnectX-7 compute-network adapters: 400/8 = 50 GB/s per adapter per direction, or 400 GB/s per node per direction when all eight adapters are used. Only the per-adapter rate is plotted. Usable application and collective bandwidth will be lower and topology-dependent. The hollow SRAM markers are not official bandwidth guarantees or a controlled generational benchmark. FlashAttention-3 Table 1 uses 12 TB/s for H100 L2 and estimates SMEM bandwidth as 128 bytes/cycle/SM × 132 SMs × 1.83 GHz = 30.92 TB/s. Other L2 microbenchmarks obtain different rates because clock, working-set size, read/write mix, partition locality, and kernel design differ. We leave H200 L2 unplotted because an independent comparable value was not verified. The H200 SMEM marker uses the same Hopper throughput, 132 SMs, and an assumed 1.83 GHz; it is an architectural estimate, not a measurement. The B200 SMEM range uses the FlashAttention-4 values of 128 bytes/cycle/SM and 148 SMs with assumed clocks of 1.85–2.0 GHz, yielding 35.05–37.89 TB/s. This range reflects clock assumptions, not a statistical confidence interval. Chips and Cheese measured B200 L2 at 21 TB/s for local-partition working sets and 16.8 TB/s when accesses cross partitions. That plotted range represents these access patterns. RRZE-HPC reports H100 L1 hits approaching 128 bytes/cycle/SM. Applying the SXM SM count and 1.83 GHz gives the approximate 31 TB/s L1 aggregate mentioned below the chart; the microbenchmark itself used a PCIe H100, so this is a normalized SXM estimate, not its measured total. No matched H200/B200 L1 result is plotted. L1 and SMEM share on-chip storage resources but have different access semantics; their rates must not be added. All-SM aggregate means independent SMs accessing their own local storage concurrently. One H100 SM at 1.83 GHz contributes only about 234 GB/s, not 31 TB/s by itself. Register and B200 tensor-memory datapaths are not represented by the SMEM numbers. Use this figure to motivate data reuse within a GPU and to understand why moving tensors between GPUs or nodes can dominate serving costs.
+
+- [H100 specs](https://www.nvidia.com/en-us/data-center/h100/)
+- [H200 specs](https://www.nvidia.com/en-us/data-center/h200/)
+- [DGX B200](https://docs.nvidia.com/dgx/dgxb200-user-guide/introduction-to-dgxb200.html)
+- [B200 HBM](https://www.nvidia.com/en-us/data-center/dgx-b200/)
+- [DGX Hopper](https://docs.nvidia.com/dgx/dgxh100-user-guide/introduction-to-dgxh100.html)
+- [FA3 Table 1](https://tridao.me/publications/flash3/flash3.pdf)
+- [FA4](https://tridao.me/blog/2026/flash4/)
+- [B200 L2 test](https://chipsandcheese.com/p/nvidias-b200-keeping-the-cuda-juggernaut)
+- [L1 test](https://github.com/RRZE-HPC/gpu-benches)
+
+## 3. Speculative decoding: draft, verify, commit
 
 **Section: Speculative decoding · overview**
 
@@ -26,7 +42,7 @@ h is the committed history and d_<i is the draft prefix before position i. The c
 - [Leviathan et al., §2–3](https://proceedings.mlr.press/v202/leviathan23a/leviathan23a.pdf)
 - [Chen et al., Algorithm 2](https://arxiv.org/html/2302.01318v1)
 
-## 3. Exact speculative sampling
+## 4. Exact speculative sampling
 
 **Section: Speculative decoding · algorithm**
 
@@ -35,7 +51,7 @@ This is the stochastic sampling algorithm in Leviathan et al. Section 2.3, writt
 - [Leviathan et al., §2.3 / Algorithm 1](https://proceedings.mlr.press/v202/leviathan23a/leviathan23a.pdf)
 - [Chen et al., Algorithm 2](https://arxiv.org/html/2302.01318v1)
 
-## 4. After verification: rollback, continuation, and the bonus
+## 5. After verification: rollback, continuation, and the bonus
 
 **Section: Speculative decoding**
 
@@ -44,7 +60,7 @@ Before verification the target cache covers h except its last token u. Verificat
 - [Leviathan et al., §2–3](https://proceedings.mlr.press/v202/leviathan23a/leviathan23a.pdf)
 - [Transformers assisted decoding](https://github.com/huggingface/transformers/blob/main/src/transformers/generation/utils.py)
 
-## 5. When does the extra work pay off?
+## 6. When does the extra work pay off?
 
 **Section: Speculative decoding**
 
@@ -53,7 +69,7 @@ Start at two accepted proposals, matching the rollback example. Four sequential 
 - [Leviathan et al., §2–3](https://proceedings.mlr.press/v202/leviathan23a/leviathan23a.pdf)
 - [vLLM speculative decoding](https://docs.vllm.ai/en/latest/features/speculative_decoding/)
 
-## 6. Quiz: Resampling from the target after rejection
+## 7. Quiz: Resampling from the target after rejection
 
 **Section: Speculative decoding theory · multiple-choice quiz**
 
@@ -61,7 +77,7 @@ Allow approximately 2–3 minutes for discussion and the immediate solution. The
 
 - [Adapted from Leviathan et al., §2.3](https://proceedings.mlr.press/v202/leviathan23a/leviathan23a.pdf)
 
-## 7. Quiz solution: account for both output paths
+## 8. Quiz solution: account for both output paths
 
 **Section: Speculative decoding theory · quiz solution**
 
@@ -70,7 +86,7 @@ C follows by summing the joint probabilities of two disjoint events: emitting x 
 - [Adapted from Leviathan et al., §2.3](https://proceedings.mlr.press/v202/leviathan23a/leviathan23a.pdf)
 - [Leviathan et al., App. A.1](https://proceedings.mlr.press/v202/leviathan23a/leviathan23a.pdf)
 
-## 8. Why speculative sampling is exact
+## 9. Why speculative sampling is exact
 
 **Section: Speculative decoding theory · 8–10 min**
 
@@ -79,7 +95,7 @@ This proof completes the correction motivated by the multiple-choice quiz. Fix a
 - [Leviathan et al., App. A.1](https://proceedings.mlr.press/v202/leviathan23a/leviathan23a.pdf)
 - [Chen et al., §4.2](https://arxiv.org/html/2302.01318v1#S4.SS2)
 
-## 9. Acceptance measures distribution overlap
+## 10. Acceptance measures distribution overlap
 
 **Section: Speculative decoding theory**
 
@@ -87,7 +103,7 @@ For a fixed context, sum the accepted mass min(p(x),q(x)) over the vocabulary. U
 
 - [Leviathan et al., §3](https://proceedings.mlr.press/v202/leviathan23a/leviathan23a.pdf)
 
-## 10. Expected tokens per verification round
+## 11. Expected tokens per verification round
 
 **Section: Speculative decoding theory**
 
@@ -95,7 +111,7 @@ Let A be the consecutive accepted-prefix length among gamma proposals. N=A+1 inc
 
 - [Leviathan et al., §3](https://proceedings.mlr.press/v202/leviathan23a/leviathan23a.pdf)
 
-## 11. Expected speedup and draft length
+## 12. Expected speedup and draft length
 
 **Section: Speculative decoding theory**
 
@@ -103,7 +119,7 @@ Use a stationary fixed-workload approximation and enough generation rounds for a
 
 - [Leviathan et al., §3](https://proceedings.mlr.press/v202/leviathan23a/leviathan23a.pdf)
 
-## 12. Follow one request from arrival to completion
+## 13. Follow one request from arrival to completion
 
 **Section: Setup · 3 min**
 
@@ -112,7 +128,7 @@ Transition from accelerating one generation to serving many concurrent requests 
 - [vLLM metrics](https://docs.vllm.ai/en/latest/design/metrics/)
 - [Berkeley L18](https://scalable-ai.eecs.berkeley.edu/S2026/assets/lecture_slides/lecture_18.pdf)
 
-## 13. An agent session contains many model calls
+## 14. An agent session contains many model calls
 
 **Section: Agent cache reuse**
 
@@ -121,7 +137,7 @@ Start with one coding task, not several unrelated users. Each model call returns
 - [Manus: agent context](https://manus.im/blog/Context-Engineering-for-AI-Agents-Lessons-from-Building-Manus)
 - [vLLM: prefix reuse](https://docs.vllm.ai/en/latest/features/automatic_prefix_caching/)
 
-## 14. Hit rate needs a denominator and an explanation
+## 15. Hit rate needs a denominator and an explanation
 
 **Section: Agent cache reuse**
 
@@ -130,7 +146,7 @@ Here H is cached input tokens divided by total input tokens for one model call, 
 - [vLLM: cache metrics](https://docs.vllm.ai/en/latest/design/metrics/#prefix-cache-metrics)
 - [vLLM: prefix reuse](https://docs.vllm.ai/en/latest/features/automatic_prefix_caching/)
 
-## 15. Editing the past moves the cache-reuse boundary
+## 16. Editing the past moves the cache-reuse boundary
 
 **Section: Agent cache reuse**
 
@@ -139,7 +155,7 @@ This is selective compaction of an old test interaction (the action and its tool
 - [vLLM: cache identity](https://docs.vllm.ai/en/latest/design/prefix_caching/)
 - [Anthropic: context editing](https://platform.claude.com/docs/en/build-with-claude/context-editing#context-editing-and-prompt-caching)
 
-## 16. Compaction causes a rebuild, then reuse recovers
+## 17. Compaction causes a rebuild, then reuse recovers
 
 **Section: Agent cache reuse**
 
@@ -148,17 +164,17 @@ Advance through retain, compact, and the next append. Starting cached input is4k
 - [Anthropic: context editing](https://platform.claude.com/docs/en/build-with-claude/context-editing#context-editing-and-prompt-caching)
 - [vLLM: prefix reuse](https://docs.vllm.ai/en/latest/features/automatic_prefix_caching/)
 
-## 17. Serve a 405B model on eight H100 nodes
+## 18. Serve a 405B model on eight H100 nodes
 
 **Section: Case study · Llama 3.1 405B on 64 H100s**
 
-This is a new deployment case, separate from the four-GPU 8B example on slide 12. Here a node explicitly means an eight-GPU server: eight nodes contain 64 GPUs. The hardware is a DGX-like H100 SXM 80 GB system with an intra-node NVSwitch fabric and an inter-node RDMA-capable network whose actual bandwidth and latency must be measured. The H100 BF16 peak is the dense peak, not the doubled sparse peak. The linked applied-inference chapter supplies the progression from capacity to latency and deployment, but its 70B numerical examples are not reused. All 405B values are derived independently. Batch B later means the number of sequences in one decode microbatch on one replica; sequence length S means the number of currently cached positions. S grows during generation. Storage units are decimal: 1 GB = 10^9 bytes. The baseline uses the canonical architecture with 8 KV heads, BF16 weights, and BF16 KV unless explicitly changed. P = 405 billion is rounded; equal weight partitioning is a planning approximation. The baseline excludes prefix sharing, CPU offload, and a speculative draft model. No GPU measurements were run.
+This is a new deployment case, separate from the four-GPU 8B example on slide 13. Here a node explicitly means an eight-GPU server: eight nodes contain 64 GPUs. The hardware is a DGX-like H100 SXM 80 GB system with an intra-node NVSwitch fabric and an inter-node RDMA-capable network whose actual bandwidth and latency must be measured. The H100 BF16 peak is the dense peak, not the doubled sparse peak. The linked applied-inference chapter supplies the progression from capacity to latency and deployment, but its 70B numerical examples are not reused. All 405B values are derived independently. Batch B later means the number of sequences in one decode microbatch on one replica; sequence length S means the number of currently cached positions. S grows during generation. Storage units are decimal: 1 GB = 10^9 bytes. The baseline uses the canonical architecture with 8 KV heads, BF16 weights, and BF16 KV unless explicitly changed. P = 405 billion is rounded; equal weight partitioning is a planning approximation. The baseline excludes prefix sharing, CPU offload, and a speculative draft model. No GPU measurements were run.
 
 - [Applied inference chapter](https://liltom-eth.github.io/scaling-book-pytorch/chapters/applied-inference.html)
 - [DGX H100 system guide](https://docs.nvidia.com/dgx/dgxh100-user-guide/introduction-to-dgxh100.html)
 - [H100 specifications](https://www.nvidia.com/en-us/data-center/h100/)
 
-## 18. First constraint: one BF16 copy exceeds one node
+## 19. First constraint: one BF16 copy exceeds one node
 
 **Section: Case study · Llama 3.1 405B on 64 H100s**
 
@@ -168,7 +184,7 @@ The bar compares total storage, not a physically pooled memory address space. Ea
 - [Llama 3 paper §6](https://arxiv.org/html/2407.21783v3#S6)
 - [Week 3: combine groups](https://zhiweixx.github.io/llm-systems-study-group/week-3/overview.html#slide-17)
 
-## 19. A starting layout: four replicas of TP8 × PP2
+## 20. A starting layout: four replicas of TP8 × PP2
 
 **Section: Case study · Llama 3.1 405B on 64 H100s**
 
@@ -178,7 +194,7 @@ Read one horizontal row first: it is one complete 405B model. Node 0 stores the 
 - [Week 3: serving replicas](https://zhiweixx.github.io/llm-systems-study-group/week-3/overview.html#slide-4)
 - [Week 3: PP](https://zhiweixx.github.io/llm-systems-study-group/week-3/overview.html#slide-10)
 
-## 20. Apply Week 3 tensor parallelism to this model
+## 21. Apply Week 3 tensor parallelism to this model
 
 **Section: Case study · Llama 3.1 405B on 64 H100s**
 
@@ -188,7 +204,7 @@ The diagram depicts one layer on its assigned PP stage. GQA associates 16 query 
 - [Week 3: attention TP](https://zhiweixx.github.io/llm-systems-study-group/week-3/overview.html#slide-9)
 - [Week 3: TP reduction](https://zhiweixx.github.io/llm-systems-study-group/week-3/overview.html#slide-8)
 
-## 21. Budget KV memory on each GPU
+## 22. Budget KV memory on each GPU
 
 **Section: Case study · Llama 3.1 405B on 64 H100s**
 
@@ -197,7 +213,7 @@ KV bytes for the whole model per cached token are 2 × 126 × 8 × 128 × 2 = 51
 - [Meta model configuration](https://github.com/meta-llama/llama-models/blob/main/models/sku_list.py)
 - [Week 3: KV ownership](https://zhiweixx.github.io/llm-systems-study-group/week-3/overview.html#slide-9)
 
-## 22. Why not simply use TP16?
+## 23. Why not simply use TP16?
 
 **Section: Case study · Llama 3.1 405B on 64 H100s**
 
@@ -207,7 +223,7 @@ Compare one replica using exactly the same two nodes. In plain head-sharded TP16
 - [vLLM Q/K/V sharding](https://github.com/vllm-project/vllm/blob/v0.19.1/vllm/model_executor/layers/linear.py#L1009)
 - [Week 3: placement](https://zhiweixx.github.io/llm-systems-study-group/week-3/overview.html#slide-18)
 
-## 23. Pipeline throughput is different from token latency
+## 24. Pipeline throughput is different from token latency
 
 **Section: Case study · Llama 3.1 405B on 64 H100s**
 
@@ -217,7 +233,7 @@ This teaching timeline uses a weight-streaming lower bound as the duration of on
 - [Week 3: PP microbatches](https://zhiweixx.github.io/llm-systems-study-group/week-3/overview.html#slide-11)
 - [H100 specifications](https://www.nvidia.com/en-us/data-center/h100/)
 
-## 24. Decode: reuse weights, but read each request’s KV
+## 25. Decode: reuse weights, but read each request’s KV
 
 **Section: Case study · Llama 3.1 405B on 64 H100s**
 
@@ -227,7 +243,7 @@ For TP8 × PP2, one microbatch traverses both stages, so the total path uses an 
 - [H100 specifications](https://www.nvidia.com/en-us/data-center/h100/)
 - [Week 3: communication costs](https://zhiweixx.github.io/llm-systems-study-group/week-3/overview.html#slide-19)
 
-## 25. Prefill reuses weights across thousands of tokens
+## 26. Prefill reuses weights across thousands of tokens
 
 **Section: Case study · Llama 3.1 405B on 64 H100s**
 
@@ -237,7 +253,7 @@ P = 405B and T = 8,192 give 2PT = 6.63552 PFLOPs for the leading dense forward w
 - [H100 specifications](https://www.nvidia.com/en-us/data-center/h100/)
 - [Week 3: PP scheduling](https://zhiweixx.github.io/llm-systems-study-group/week-3/overview.html#slide-11)
 
-## 26. Long contexts make KV memory a limiting factor
+## 27. Long contexts make KV memory a limiting factor
 
 **Section: Case study · Llama 3.1 405B on 64 H100s**
 
@@ -247,7 +263,7 @@ The canonical maximum context is 131,072 tokens, including generated output; the
 - [Meta model configuration](https://github.com/meta-llama/llama-models/blob/main/models/sku_list.py)
 - [Week 3: context parallelism](https://zhiweixx.github.io/llm-systems-study-group/week-3/overview.html#slide-12)
 
-## 27. FP8 can fit a full replica on one node
+## 28. FP8 can fit a full replica on one node
 
 **Section: Case study · Llama 3.1 405B on 64 H100s**
 
@@ -256,7 +272,7 @@ Weight precision changes here, while KV stays BF16. The actual canonical archite
 - [Meta FP8 implementation](https://github.com/meta-llama/llama-models/blob/0e0b8c519242d5833d8c11bffc1232b77ad7f301/models/llama3/quantization/loader.py#L53-L96)
 - [NVIDIA 405B FP8 support](https://docs.nvidia.com/nim/large-language-models/1.13.0/supported-models.html#llama-3-1-405b-instruct)
 
-## 28. Turn the layout into a serving configuration
+## 29. Turn the layout into a serving configuration
 
 **Section: Case study · Llama 3.1 405B on 64 H100s**
 
@@ -265,7 +281,7 @@ This is a configuration example based on vLLM 0.19.1 documentation, not a deploy
 - [vLLM distributed serving](https://docs.vllm.ai/en/v0.19.1/serving/parallelism_scaling/)
 - [Week 3: combined layout](https://zhiweixx.github.io/llm-systems-study-group/week-3/overview.html#slide-17)
 
-## 29. Which layout would we actually choose?
+## 30. Which layout would we actually choose?
 
 **Section: Case study · Llama 3.1 405B on 64 H100s**
 
