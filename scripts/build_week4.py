@@ -9,13 +9,12 @@ ASSETS=ROOT/'site/slide-assets/week4'
 def all_slides():
     from week4.core import get_slides as core
     from week4.prefix import get_slides as prefix
-    from week4.scheduling import get_slides as scheduling
-    from week4.benchmark import get_slides as benchmark
+    from week4.llama405b import get_slides as llama405b
     from week4.speculative import get_slides as speculative
     from week4.speculative_theory import get_slides as theory
     opening = core()
-    slides = opening[:1]+speculative()+theory()+opening[1:]+prefix()+scheduling()+benchmark()
-    assert len(slides) == 35
+    slides = opening[:1]+speculative()+theory()+opening[1:]+prefix()[:4]+llama405b()
+    assert len(slides) == 29
     return slides
 
 def build():
@@ -39,10 +38,11 @@ def build():
     '''
     parts=[]
     notes=['# Week 4 — Speculative decoding and LLM serving','',
-      '35 slides, beginning with a two-slide introduction to speculative decoding and its exact sampling algorithm (4–5 minutes), KV continuation and a timing comparison (about 4 minutes), a multiple-choice sampling quiz and its solution (about 3 minutes), and four theory slides (8–10 minutes). The full teaching sequence is approximately 55–65 minutes, plus 15 minutes of discussion. These are planning estimates; choose sections for a 50-minute meeting.','',
-      'Route: 1 opening; 2–3 speculative decoding and exact sampling; 4–5 KV continuation and cost; 6–7 multiple-choice quiz and solution; 8–11 correctness and performance theory; 12 serving case and request lifecycle; 13–21 agent trajectories, token hit rate, compaction and Question 1; 22–29 scheduling, routing, deployment and Question 2; 30–34 measurement; 35 discussion. Questions have immediate solution slides.','',
-      'All diagrams and numerical cases are authored teaching examples, not published GPU measurements or verified company interview questions. Primary sources appear on the slides and below. Documentation checked September 30, 2026; benchmark flags should be checked against the installed vLLM version.','',
-      'The [companion lab](https://zhiweixx.github.io/llm-systems-study-group/week-4/lab.html) includes a dry-run-first request-rate sweep. No GPU benchmark was run to produce these slides. The HTML is self-contained and works offline; reference links need internet.','']
+      '29 slides. Slides 1–16 retain the speculative-decoding and agent-cache lessons. Slides 17–29 replace the former closing sections with a worked Llama 3.1 405B serving case. Hardware assumption: eight servers, each with eight H100 SXM 80 GB GPUs, for 64 GPUs total.','',
+      'Route: 2–3 speculative decoding and exact sampling; 4–5 KV continuation and cost; 6–7 sampling quiz and solution; 8–11 correctness and performance theory; 12 request lifecycle; 13–16 agent context and compaction. The 405B case then covers fit (18), replica placement (19), TP ownership (20), KV budget (21), TP16 (22), PP timing (23), decode/prefill costs (24–25), context parallelism (26), FP8 (27), configuration (28), and deployment choice (29).','',
+      'This is an expanded teaching deck. Select a route for the meeting rather than treating the page count as a rehearsed duration. The first 16 slides and the 405B case can also be presented as separate sections.','',
+      'Diagrams and numerical estimates are authored teaching examples, not GPU measurements. The applied-inference chapter supplies a worked-problem structure; all 405B calculations are rederived from primary model/hardware sources and distinguish one-request latency from pipelined throughput. Versioned vLLM documentation is 0.19.1; verify the selected backend and installed version.','',
+      'The optional [serving lab](https://zhiweixx.github.io/llm-systems-study-group/week-4/lab.html) remains available separately. No GPU benchmark or cluster deployment was run to produce these slides. The HTML works offline; reference links need internet.','']
     for i,s in enumerate(slides,1):
         footer=line(75,838,1525,838,'#bdc7cc')
         xx=75; links=[]
@@ -60,7 +60,7 @@ def build():
     chrome=f'''<nav class="deck-chrome" aria-label="Presentation controls"><div class="chrome-left"><button id="prev" type="button" aria-label="Previous slide">←</button><span id="counter" aria-live="polite">1 / {len(slides)}</span><button id="next" type="button" aria-label="Next slide">→</button><span id="slide-title"></span></div><div class="chrome-right"><button id="overview-toggle" type="button">Slides</button><button id="notes-toggle" type="button">Notes</button><button id="fullscreen" type="button">Full screen</button><button id="print" type="button">Print / PDF</button><button id="help-toggle" type="button" aria-label="Keyboard help">?</button></div></nav>
 <section id="notes-panel" class="deck-overlay" hidden><div class="panel-header"><h2>Speaker notes</h2><button data-close-overlay="true" type="button">Close</button></div><div id="notes-content"></div></section>
 <section id="overview-panel" class="deck-overlay" hidden><div class="panel-header"><h2>{len(slides)} slides</h2><button data-close-overlay="true" type="button">Close</button></div><div id="overview-list"></div></section>
-<section id="help-panel" class="deck-overlay" hidden><div class="panel-header"><h2>Presentation controls</h2><button data-close-overlay="true" type="button">Close</button></div><p>Arrow keys: change slides. Home / End: first / last slide. Escape: close a panel.</p><p>Next step advances an example inside a slide. Notes contains explanations, assumptions, and sources. Slides 2–3 introduce speculative decoding and exact sampling, 4–5 cover KV continuation and cost, 6–7 give a multiple-choice quiz and its solution, and 8–11 develop the theory, followed by caching, scheduling, routing, and measurement.</p><p>Print / PDF shows completed step examples and the default illustrative timing case. Use the Slides menu to choose a topic.</p></section>'''
+<section id="help-panel" class="deck-overlay" hidden><div class="panel-header"><h2>Presentation controls</h2><button data-close-overlay="true" type="button">Close</button></div><p>Arrow keys: change slides. Home / End: first / last slide. Escape: close a panel.</p><p>Next step advances an example inside a slide. Notes contains explanations, assumptions, and sources. Slides 2–3 introduce speculative decoding and exact sampling, 4–5 cover KV continuation and cost, 6–7 give a multiple-choice quiz and its solution, and 8–11 develop the theory, followed by agent caching (13–16) and a Llama 3.1 405B deployment case on 64 H100s (17–29).</p><p>Print / PDF shows completed step examples and the default illustrative timing case. Use the Slides menu to choose a topic.</p></section>'''
     js=(ASSETS/'navigation.js').read_text()+'\n'+(ASSETS/'interactions.js').read_text()
     html='<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>LLM serving · Week 4</title><style>'+css+'</style></head><body><main id="viewport" aria-label="Presentation"><div id="stage">'+''.join(parts)+'</div></main>'+chrome+'<script>'+js+'</script></body></html>'
     (ROOT/'week-4-serving.html').write_text(html)

@@ -1,18 +1,20 @@
 # Week 4 — Speculative decoding and LLM serving
 
-35 slides, beginning with a two-slide introduction to speculative decoding and its exact sampling algorithm (4–5 minutes), KV continuation and a timing comparison (about 4 minutes), a multiple-choice sampling quiz and its solution (about 3 minutes), and four theory slides (8–10 minutes). The full teaching sequence is approximately 55–65 minutes, plus 15 minutes of discussion. These are planning estimates; choose sections for a 50-minute meeting.
+29 slides. Slides 1–16 retain the speculative-decoding and agent-cache lessons. Slides 17–29 replace the former closing sections with a worked Llama 3.1 405B serving case. Hardware assumption: eight servers, each with eight H100 SXM 80 GB GPUs, for 64 GPUs total.
 
-Route: 1 opening; 2–3 speculative decoding and exact sampling; 4–5 KV continuation and cost; 6–7 multiple-choice quiz and solution; 8–11 correctness and performance theory; 12 serving case and request lifecycle; 13–21 agent trajectories, token hit rate, compaction and Question 1; 22–29 scheduling, routing, deployment and Question 2; 30–34 measurement; 35 discussion. Questions have immediate solution slides.
+Route: 2–3 speculative decoding and exact sampling; 4–5 KV continuation and cost; 6–7 sampling quiz and solution; 8–11 correctness and performance theory; 12 request lifecycle; 13–16 agent context and compaction. The 405B case then covers fit (18), replica placement (19), TP ownership (20), KV budget (21), TP16 (22), PP timing (23), decode/prefill costs (24–25), context parallelism (26), FP8 (27), configuration (28), and deployment choice (29).
 
-All diagrams and numerical cases are authored teaching examples, not published GPU measurements or verified company interview questions. Primary sources appear on the slides and below. Documentation checked September 30, 2026; benchmark flags should be checked against the installed vLLM version.
+This is an expanded teaching deck. Select a route for the meeting rather than treating the page count as a rehearsed duration. The first 16 slides and the 405B case can also be presented as separate sections.
 
-The [companion lab](https://zhiweixx.github.io/llm-systems-study-group/week-4/lab.html) includes a dry-run-first request-rate sweep. No GPU benchmark was run to produce these slides. The HTML is self-contained and works offline; reference links need internet.
+Diagrams and numerical estimates are authored teaching examples, not GPU measurements. The applied-inference chapter supplies a worked-problem structure; all 405B calculations are rederived from primary model/hardware sources and distinguish one-request latency from pipelined throughput. Versioned vLLM documentation is 0.19.1; verify the selected backend and installed version.
+
+The optional [serving lab](https://zhiweixx.github.io/llm-systems-study-group/week-4/lab.html) remains available separately. No GPU benchmark or cluster deployment was run to produce these slides. The HTML works offline; reference links need internet.
 
 ## 1. Week 4 · From model execution to an online service
 
 **Section: Opening**
 
-Open with the two-slide speculative-decoding introduction: the draft–verify mechanism followed by the exact stochastic sampling algorithm. Allow 4–5 minutes for slides 2–3, about 4 minutes for KV continuation and the timing comparison on slides 4–5, and about 3 minutes for the multiple-choice sampling quiz and its solution on slides 6–7. Slides 8–11 develop correctness and performance theory (8–10 minutes): exact sampling, acceptance as distribution overlap, expected tokens per round, and expected speedup. Slide 12 connects the four-GPU serving case to the request lifecycle; 13–21 follow a coding agent through consecutive model calls, hit-rate metrics, compaction and a checkpoint-policy question; 22–29 cover scheduling, routing and deployment; 30–34 cover measurement; 35 begins discussion. The full sequence is approximately 55–65 minutes plus 15 minutes of discussion, not a rehearsed duration. Choose later sections if retaining a 50-minute meeting. Numerical cases and diagrams are authored teaching examples, not GPU measurements.
+Slides 2–11 cover speculative decoding, exact sampling, a multiple-choice quiz and theory. Slide 12 introduces a small serving example; slides 13–16 explain agent context and prefix-cache reuse. Slides 17–29 introduce a separate 405B deployment on eight 8-H100 servers: storage, TP/PP, KV capacity, latency versus throughput, context parallelism and precision choices. This is expanded teaching material; select a route for the available meeting time. Numerical deployment estimates are analytical and were not GPU-benchmarked.
 
 
 ## 2. Speculative decoding: draft, verify, commit
@@ -105,7 +107,7 @@ Use a stationary fixed-workload approximation and enough generation rounds for a
 
 **Section: Setup · 3 min**
 
-Transition from accelerating one generation to serving many concurrent requests under a fixed GPU budget. Assume one 8B model fits on each GPU at the chosen precision. A replica is a complete model instance, not a tensor-parallel shard; the router selects ONE of the four replicas for a request. Each replica owns its own queue and local KV cache, with no cross-GPU cache sharing in this baseline. A long-running agent issues many model calls as its task progresses; repeated transcript prefixes create temporal reuse within that session. Different sessions compete for the same service. Keep the model, precision and hardware fixed when comparing serving policies. The lower diagram follows one request through the selected engine, including its earlier routing time. This is a logical sequence, not a scale drawing or a promise of one GPU kernel per box. Prefill may be split across engine iterations and interleaved with other requests. Prefix caching can skip a portion of input computation, but routing, queuing, uncached work, and the output-generation path remain. The first token is produced using the prompt processing result; subsequent tokens are generated by decode steps. On completion, release the request’s references and retain reusable prefix blocks if policy allows. For n>1 output tokens, client mean TPOT=(last-token time−first-token time)/(n−1), with streaming event/token conventions stated by the benchmark. Individual ITL samples need not equal the mean. Network buffering can change observed streaming gaps. Define timestamp boundaries before comparing server and client metrics. Later benchmarking slides introduce illustrative latency thresholds; these are not hardware constants.
+Transition from accelerating one generation to serving many concurrent requests under a fixed GPU budget. Assume one 8B model fits on each GPU at the chosen precision. A replica is a complete model instance, not a tensor-parallel shard; the router selects ONE of the four replicas for a request. Each replica owns its own queue and local KV cache, with no cross-GPU cache sharing in this baseline. A long-running agent issues many model calls as its task progresses; repeated transcript prefixes create temporal reuse within that session. Different sessions compete for the same service. Keep the model, precision and hardware fixed when comparing serving policies. The lower diagram follows one request through the selected engine, including its earlier routing time. This is a logical sequence, not a scale drawing or a promise of one GPU kernel per box. Prefill may be split across engine iterations and interleaved with other requests. Prefix caching can skip a portion of input computation, but routing, queuing, uncached work, and the output-generation path remain. The first token is produced using the prompt processing result; subsequent tokens are generated by decode steps. On completion, release the request’s references and retain reusable prefix blocks if policy allows. For n>1 output tokens, client mean TPOT=(last-token time−first-token time)/(n−1), with streaming event/token conventions stated by the benchmark. Individual ITL samples need not equal the mean. Network buffering can change observed streaming gaps. Define timestamp boundaries before comparing server and client metrics. The later 405B deployment is a separate hardware case; it applies these latency metrics to multi-node replicas.
 
 - [vLLM metrics](https://docs.vllm.ai/en/latest/design/metrics/)
 - [Berkeley L18](https://scalable-ai.eecs.berkeley.edu/S2026/assets/lecture_slides/lecture_18.pdf)
@@ -146,168 +148,130 @@ Advance through retain, compact, and the next append. Starting cached input is4k
 - [Anthropic: context editing](https://platform.claude.com/docs/en/build-with-claude/context-editing#context-editing-and-prompt-caching)
 - [vLLM: prefix reuse](https://docs.vllm.ai/en/latest/features/automatic_prefix_caching/)
 
-## 17. Will future savings repay the cache rebuild?
+## 17. Serve a 405B model on eight H100 nodes
 
-**Section: Agent cache reuse**
+**Section: Case study · Llama 3.1 405B on 64 H100s**
 
-The additional latency R is the difference between compact-now and keep-history at this point, including any separate summary generation and extra main-model prompt processing. It is not all of the compacted call’s latency. If n subsequent comparable calls each save about s time, the net task-time change is approximately R−n*s. U new query positions each attend to C cached keys in ordinary full causal attention, giving U*C cross-prefix query-key pairs per head and layer; attention within the new suffix adds further work. This is a local planning model, not a universal latency law: future queries, output lengths, cache residency, batching and queueing can change s. Use the sum of per-call savings if it is not approximately constant. Even with a100% prefix hit, suffix and decode attention still read existing K/V. Shortening the history reduces that work and the number of active KV positions required, while the allocator may retain old evictable cache blocks. Provider billing can also charge cached-input reads, but use actual provider rates and cache-write charges for a money objective; no pricing is assumed here. The policy must also preserve correctness and task-relevant constraints. Use matched workload replay for system costs and real end-to-end task evaluation for quality and changed behavior. A hard context-window or capacity constraint can force compaction regardless of the latency break-even.
+This is a new deployment case, separate from the four-GPU 8B example on slide 12. Here a node explicitly means an eight-GPU server: eight nodes contain 64 GPUs. The hardware is a DGX-like H100 SXM 80 GB system with an intra-node NVSwitch fabric and an inter-node RDMA-capable network whose actual bandwidth and latency must be measured. The H100 BF16 peak is the dense peak, not the doubled sparse peak. The linked applied-inference chapter supplies the progression from capacity to latency and deployment, but its 70B numerical examples are not reused. All 405B values are derived independently. Batch B later means the number of sequences in one decode microbatch on one replica; sequence length S means the number of currently cached positions. S grows during generation. Storage units are decimal: 1 GB = 10^9 bytes. The baseline uses the canonical architecture with 8 KV heads, BF16 weights, and BF16 KV unless explicitly changed. P = 405 billion is rounded; equal weight partitioning is a planning approximation. The baseline excludes prefix sharing, CPU offload, and a speculative draft model. No GPU measurements were run.
 
-- [vLLM: prefix reuse](https://docs.vllm.ai/en/latest/features/automatic_prefix_caching/)
-- [Anthropic: context editing](https://platform.claude.com/docs/en/build-with-claude/context-editing#context-editing-and-prompt-caching)
-- [Berkeley L21, pp. 35–39](https://scalable-ai.eecs.berkeley.edu/S2026/assets/lecture_slides/lecture_21.pdf#page=35)
+- [Applied inference chapter](https://liltom-eth.github.io/scaling-book-pytorch/chapters/applied-inference.html)
+- [DGX H100 system guide](https://docs.nvidia.com/dgx/dgxh100-user-guide/introduction-to-dgxh100.html)
+- [H100 specifications](https://www.nvidia.com/en-us/data-center/h100/)
 
-## 18. Design the transcript to support both reuse and reasoning
+## 18. First constraint: one BF16 copy exceeds one node
 
-**Section: Agent cache reuse**
+**Section: Case study · Llama 3.1 405B on 64 H100s**
 
-This is an authored policy sketch for a coding agent, informed by Berkeley’s long-context packing/checkpoint discussion and Manus’s restorable external memory. It is not a claim that every framework uses this policy. Before a new tool response first enters the model input, persist the full raw log and expose a useful bounded view with retrieval references. This reduces fresh input without changing old cached tokens. Selecting what to omit can lose essential evidence; record failures and exact paths or line ranges needed to recover it. Later compaction changes history and pays the previously explained rebuild cost. Preserve task constraints, current state, rejected hypotheses and unresolved errors so that the agent does not repeat failed work. A stable checkpoint followed by append-only updates permits reuse between checkpoints; repeatedly rewriting that checkpoint does not. Tool-result clearing often replaces selected old results by placeholders, whereas summarization synthesizes a replacement state and may cover much more history. Both are context policies rather than KV-cache eviction policies. A context-token threshold and retaining the most recent N tool calls are separate controls; neither establishes an industry-wide every-N-turns rule.
+The bar compares total storage, not a physically pooled memory address space. Each GPU must hold its assigned tensors. ceil(810 / 80) = 11 is only a necessary byte-capacity condition; it is not a suggested tensor-parallel degree. TP degrees must suit the model heads and matrix partitions, while runtime allocations and KV also need space. A practical two-node option is TP8 × PP2: each node owns 63 of the 126 Transformer layers and shards its layers over eight GPUs. The embedding and output matrices at the two endpoints, plus other unsharded tensors, can make the true rank allocations unequal. Section 6.1 of the Meta paper reports this two-machine BF16 inference design. Storage units are decimal: 1 GB = 10^9 bytes. The baseline uses the canonical architecture with 8 KV heads, BF16 weights, and BF16 KV unless explicitly changed. P = 405 billion is rounded; equal weight partitioning is a planning approximation. The baseline excludes prefix sharing, CPU offload, and a speculative draft model. No GPU measurements were run.
 
-- [Berkeley L21, pp. 35–39](https://scalable-ai.eecs.berkeley.edu/S2026/assets/lecture_slides/lecture_21.pdf#page=35)
-- [Manus: agent context](https://manus.im/blog/Context-Engineering-for-AI-Agents-Lessons-from-Building-Manus)
-- [Anthropic: context editing](https://platform.claude.com/docs/en/build-with-claude/context-editing#context-editing-and-prompt-caching)
+- [Meta model configuration](https://github.com/meta-llama/llama-models/blob/main/models/sku_list.py)
+- [Llama 3 paper §6](https://arxiv.org/html/2407.21783v3#S6)
+- [Week 3: combine groups](https://zhiweixx.github.io/llm-systems-study-group/week-3/overview.html#slide-17)
 
-## 19. Three different mechanisms can lower cache hit rate
+## 19. A starting layout: four replicas of TP8 × PP2
 
-**Section: Agent cache reuse**
+**Section: Case study · Llama 3.1 405B on 64 H100s**
 
-The first row is a denominator effect plus real extra fresh work, not a failure of old-prefix retention. The second is a cache-identity change; inspect serialized model input rather than only the user-visible chat, because tool definitions, timestamps, formatting or hidden context transformations can alter token prefixes. The third concerns availability: a different worker may have no local copy, memory pressure can evict it, or a provider cache can expire. Relevant model/configuration changes can also prevent reuse even if visible text matches, so hold those fixed before interpreting the third row. On a self-hosted engine record request IDs and replica/cache metrics; on a managed API use exposed cache-usage fields and accessible client timing without pretending to observe hidden server queue or prefill timings. Cache IDs/hashes can locate differences without logging sensitive raw content. For a changed agent policy, compare the same tasks and report both token-weighted hit rate and total uncached positions, queue delay, TTFT, end-to-end task time and success. Caching can interact with routing and load; the later serving section addresses those effects.
+Read one horizontal row first: it is one complete 405B model. Node 0 stores the first 63 layers and node 1 stores the last 63. Within either node, eight GPUs cooperate on every local layer. Duplicate this layout to create four replicas using the 64-GPU budget. These are inference replicas, the serving analogue of data parallelism from Week 3, rather than DDP training jobs. KV belongs to the chosen replica. A session can be routed back to its replica for cache reuse, subject to load and cache residency. The PP arrow represents a logical hidden-state transfer; actual wire volume depends on whether the backend transfers replicated activations or gathers/scatters a sharded boundary. One request does not span all four replicas. Storage units are decimal: 1 GB = 10^9 bytes. The baseline uses the canonical architecture with 8 KV heads, BF16 weights, and BF16 KV unless explicitly changed. P = 405 billion is rounded; equal weight partitioning is a planning approximation. The baseline excludes prefix sharing, CPU offload, and a speculative draft model. No GPU measurements were run.
 
-- [vLLM: cache identity](https://docs.vllm.ai/en/latest/design/prefix_caching/)
-- [vLLM: cache metrics](https://docs.vllm.ai/en/latest/design/metrics/#prefix-cache-metrics)
-- [Anthropic: context editing](https://platform.claude.com/docs/en/build-with-claude/context-editing#context-editing-and-prompt-caching)
+- [Llama 3 paper §6](https://arxiv.org/html/2407.21783v3#S6)
+- [Week 3: serving replicas](https://zhiweixx.github.io/llm-systems-study-group/week-3/overview.html#slide-4)
+- [Week 3: PP](https://zhiweixx.github.io/llm-systems-study-group/week-3/overview.html#slide-10)
 
-## 20. Question 1: refresh the summary after every tool call?
+## 20. Apply Week 3 tensor parallelism to this model
 
-**Section: Question 1**
+**Section: Case study · Llama 3.1 405B on 64 H100s**
 
-Allow the audience to reason about a realistic harness design, not guess a cache formula. Both candidate prompts are24k because the summary remains2k and all other text is unchanged. The summary in policy A starts with a different first token; otherwise the reuse boundary could extend into the summary. The newly appended2k include the preceding model action and the latest tool observation, under the conservative previous-input convention. Policy B is a decision not to refresh on this call, not a policy never to compact. The cached22k input is4k system/tools+2k existing summary+16k recent history. Ask first for reused and uncached token counts, then for the tradeoff and measurement strategy. Do not infer latency directly from token counts. This is an authored systems-design question motivated by the documented cache interaction, not a verified interview question attributed to a company.
+The diagram depicts one layer on its assigned PP stage. GQA associates 16 query heads with each of eight KV heads. TP8 assigns one complete KV head and its 16 associated query heads to each rank. The row-parallel attention output projection sums contributions from all ranks. A conventional paired column-parallel/row-parallel SwiGLU FFN similarly has a reduction after the down projection: 53,248 / 8 = 6,656 intermediate features per rank. Both gate and up projections follow that split. Thus the standard replicated-activation TP forward layout has two AllReduces per layer. Sequence-parallel and fused implementations may replace or combine collectives; the diagram is a reasoning baseline, not a profiler trace. Each PP node performs its own 126 layer reductions; 252 lie along a full forward path. Storage units are decimal: 1 GB = 10^9 bytes. The baseline uses the canonical architecture with 8 KV heads, BF16 weights, and BF16 KV unless explicitly changed. P = 405 billion is rounded; equal weight partitioning is a planning approximation. The baseline excludes prefix sharing, CPU offload, and a speculative draft model. No GPU measurements were run.
 
-- [vLLM: cache identity](https://docs.vllm.ai/en/latest/design/prefix_caching/)
-- [Anthropic: context editing](https://platform.claude.com/docs/en/build-with-claude/context-editing#context-editing-and-prompt-caching)
+- [Meta model configuration](https://github.com/meta-llama/llama-models/blob/main/models/sku_list.py)
+- [Week 3: attention TP](https://zhiweixx.github.io/llm-systems-study-group/week-3/overview.html#slide-9)
+- [Week 3: TP reduction](https://zhiweixx.github.io/llm-systems-study-group/week-3/overview.html#slide-8)
 
-## 21. Solution 1: the summary’s location makes every edit costly
+## 21. Budget KV memory on each GPU
 
-**Section: Question 1 solution**
+**Section: Case study · Llama 3.1 405B on 64 H100s**
 
-Policy A’s reusable prefix ends at the first changed token after the initial4k; everything thereafter is uncached:2k updated summary+16k recent history+2k new material=20k. Policy B retains the full22k earlier input and processes only2k new. This comparison isolates prefix identity at equal prompt length. It does not prove that B is always faster or that summary updates are undesirable; an updated summary can improve reasoning, make future compaction effective, or be necessary to fit a context budget. Measure time spent generating the summary separately from main-model processing and queueing. Replay recorded inputs under identical model, hardware, cache warmness/residency, arrival conditions and output-length controls to isolate system costs. Then evaluate complete tasks with each policy: a replay fixes the trajectory and cannot reveal changed reasoning, forgotten constraints or repeated retrieval. Use confidence intervals across tasks rather than a single convenient prompt. The break-even approximation on the earlier slide is a guide to planning measurements, not a universal cadence. Transition back to service-level scheduling: all these calls now compete with other sessions for the same replicas.
+KV bytes for the whole model per cached token are 2 × 126 × 8 × 128 × 2 = 516,096. One 8,192-token request uses 4.227858432 GB of unique KV across the replica. TP8 head sharding and PP2 layer sharding divide this by 16: 0.264241152 GB per GPU per request. At B = 32, this is 8.455716864 GB per GPU. The assumed rank budget for KV is 80 − 50.625 − 8 = 21.375 GB, so floor(21.375 / 0.264241152) = 80. Four replicas would fit approximately 320 such requests under this simplified capacity model. This is not a throughput claim, a max-num-seqs recommendation, or a promise of an ITL target. Context grows during generation. At 32,768 cached tokens, the same calculation gives 20 requests per replica. Runtime workspace may grow with the batch and prefill token budget; the 8 GB reserve is not a guarantee. No prefix sharing is credited. Storage units are decimal: 1 GB = 10^9 bytes. The baseline uses the canonical architecture with 8 KV heads, BF16 weights, and BF16 KV unless explicitly changed. P = 405 billion is rounded; equal weight partitioning is a planning approximation. The baseline excludes prefix sharing, CPU offload, and a speculative draft model. No GPU measurements were run.
 
-- [Anthropic: context editing](https://platform.claude.com/docs/en/build-with-claude/context-editing#context-editing-and-prompt-caching)
-- [Berkeley L21, pp. 35–39](https://scalable-ai.eecs.berkeley.edu/S2026/assets/lecture_slides/lecture_21.pdf#page=35)
+- [Meta model configuration](https://github.com/meta-llama/llama-models/blob/main/models/sku_list.py)
+- [Week 3: KV ownership](https://zhiweixx.github.io/llm-systems-study-group/week-3/overview.html#slide-9)
 
-## 22. Queues grow when arrivals outrun completions
+## 22. Why not simply use TP16?
 
-**Section: Scheduling**
+**Section: Case study · Llama 3.1 405B on 64 H100s**
 
-The numbers are a teaching construction, not a GPU benchmark. Count complete requests here, not generated tokens. The recurrence is backlog at the end = backlog at the start + arrivals - completions, with a lower bound of zero. Assuming a sustained maximum of four completions per second, six arrivals per second cannot be served indefinitely without accumulating requests. A larger queue postpones rejection but does not add processing capacity. Real LLM service capacity is workload-dependent: different prompt lengths, output lengths, prefix reuse and batch composition change the work per request. A finite burst can also make tail latency poor even when a long-run average arrival rate is below capacity. Observe the slope of the backlog and the age of the oldest request, not only a snapshot of GPU utilization. When benchmarking, distinguish how many requests the client tries to send from how many it actually sends and how many complete.
+Compare one replica using exactly the same two nodes. In plain head-sharded TP16, each rank handles 8 of the 128 query heads. Each group of 16 query heads shares one KV head, so two ranks need the same KV history. Without context sharding or another specialized attention scheme, each KV head has two copies across the 16 ranks. Each rank now holds one head across 126 layers, versus 63 layers in TP8 × PP2, so per-rank KV doubles. The exact checkpoint and implementation matter: Meta also distributed an MP16 configuration with 16 KV heads, reflecting duplication; this case starts from the canonical architecture with 8 KV heads. The duplicated K/V projections add about 0.528 GB per rank beyond 810 / 16, so TP16 weights occupy approximately 51.2 GB per rank; this duplication remains with TP16 + DCP2. All 252 conventional TP reductions now span both nodes. Wider TP can lower local layer time, but exposed network cost can negate it. Do not treat the 900 GB/s aggregate bidirectional NVLink specification as inter-node or usable AllReduce bandwidth. Context parallelism later gives a way to remove the cache duplication. Storage units are decimal: 1 GB = 10^9 bytes. The baseline uses the canonical architecture with 8 KV heads, BF16 weights, and BF16 KV unless explicitly changed. P = 405 billion is rounded; equal weight partitioning is a planning approximation. The baseline excludes prefix sharing, CPU offload, and a speculative draft model. No GPU measurements were run.
 
-- [Orca, OSDI 2022](https://www.usenix.org/conference/osdi22/presentation/yu)
+- [Meta model configuration](https://github.com/meta-llama/llama-models/blob/main/models/sku_list.py)
+- [vLLM Q/K/V sharding](https://github.com/vllm-project/vllm/blob/v0.19.1/vllm/model_executor/layers/linear.py#L1009)
+- [Week 3: placement](https://zhiweixx.github.io/llm-systems-study-group/week-3/overview.html#slide-18)
 
-## 23. Three budgets constrain each scheduling round
+## 23. Pipeline throughput is different from token latency
 
-**Section: Scheduling**
+**Section: Case study · Llama 3.1 405B on 64 H100s**
 
-Use the same four-GPU service, but zoom into the scheduler on one replica. The first limit constrains sequences admitted to execution; the second constrains the sum of newly processed positions in an iteration; the third is a memory resource constraint. The controls shown are examples from vLLM, not an assertion that every framework uses identical admission policies. A request with 10,000 cached positions still contributes one newly processed position to an ordinary decode round. It retains the old KV state and attention may read that history again. Therefore lowering a new-token budget can reduce added prefill work without making decode KV reads disappear. Sequence count also does not predict memory by itself: ten long-context requests can retain more KV than many short-context requests. Implementation versions and optional features can alter how the scheduler accounts for speculative or multimodal positions; this example is ordinary text generation with no speculation.
+This teaching timeline uses a weight-streaming lower bound as the duration of one stage. A and B are disjoint sets of requests, not successive tokens of a single sequence that could run without dependencies. At 0–15.1 ms, node 0 processes token t for A. At 15.1–30.2 ms, node 1 processes A while node 0 processes B. Only after A finishes both stages can token t + 1 for A begin. In a real engine, sampling, transfers, and scheduling add time, and the two stages may not balance. The ideal pipeline can emit one microbatch result every 15.1 ms after filling, although each microbatch spends 30.2 ms on its path. Dividing 810 GB by 16 × 3.35 TB/s estimates one stage or an ideal throughput interval, not single-microbatch latency. Meta measures improved throughput and increased latency with microbatching, so the ideal drawing is not a measured speedup. Prompt chunk pipelining can also change schedules and must be modeled explicitly. Storage units are decimal: 1 GB = 10^9 bytes. The baseline uses the canonical architecture with 8 KV heads, BF16 weights, and BF16 KV unless explicitly changed. P = 405 billion is rounded; equal weight partitioning is a planning approximation. The baseline excludes prefix sharing, CPU offload, and a speculative draft model. No GPU measurements were run.
 
-- [vLLM: scheduler tuning](https://docs.vllm.ai/en/latest/configuration/optimization/)
-- [Orca, OSDI 2022](https://www.usenix.org/conference/osdi22/presentation/yu)
+- [Llama 3 paper §6](https://arxiv.org/html/2407.21783v3#S6)
+- [Week 3: PP microbatches](https://zhiweixx.github.io/llm-systems-study-group/week-3/overview.html#slide-11)
+- [H100 specifications](https://www.nvidia.com/en-us/data-center/h100/)
 
-## 24. Chunking controls how much a new prompt interrupts chat
+## 24. Decode: reuse weights, but read each request’s KV
 
-**Section: Scheduling**
+**Section: Case study · Llama 3.1 405B on 64 H100s**
 
-Click Next step three times. At the start, four existing chat requests are decoding. A fifth request arrives with twelve uncached prompt positions. An eight-position budget admits four existing decode positions plus a four-position prompt chunk. After round 1, each existing chat has received one more output token and the new prompt has four processed positions. After round 2, the prompt has eight. Round 3 processes its final four positions; the prompt is complete and the new request can produce its first output token. It joins decoding subsequently if it continues. The toy freezes the other four chats to expose the scheduler rule. This is a teaching example of decode-prioritized chunking, not a performance simulation: equal-size boxes and rounds do not imply equal execution times. Without chunking, a long prefill admitted into a round can stretch the interval before existing chats get their next output. Smaller chunks limit that added work, while potentially delaying completion of the new prompt and adding overhead. The new prompt retains KV for its earlier chunks, which later chunks attend to as needed. Chunked prefill is distinct from continuous batching: the latter changes which requests participate; chunking additionally changes how much of a new prompt is processed in a round.
+For TP8 × PP2, one microbatch traverses both stages, so the total path uses an effective 8-way bandwidth denominator in this additive stage model. Each stage has half the weight and KV volume. At B = 32 and S = 8,192, KV occupies 135.291469824 GB across the model, total traffic is 945.291469824 GB, and the ideal stage-summed HBM time is 35.2721 ms. Leading linear work is 2PB = 25.92 TFLOPs; dividing by 8 × 989 TFLOP/s gives 3.276 ms. These are separate lower-bound components, not terms to simply add: compute and memory can overlap. The model assumes each weight and each unique KV entry is read once with efficient reuse within each GQA group; actual traffic can be higher. Decode attention adds approximately 4 × 126 × 16,384 × B × S FLOPs, about 8.4% of 2PB at S = 8,192, plus non-matmul work. At these small batches, the HBM bound dominates the linear compute bound. This does not imply that all decode workloads are bandwidth-bound. No output-token/s estimate is made without a schedule for independent PP microbatches. Storage units are decimal: 1 GB = 10^9 bytes. The baseline uses the canonical architecture with 8 KV heads, BF16 weights, and BF16 KV unless explicitly changed. P = 405 billion is rounded; equal weight partitioning is a planning approximation. The baseline excludes prefix sharing, CPU offload, and a speculative draft model. No GPU measurements were run.
 
-- [vLLM: scheduler tuning](https://docs.vllm.ai/en/latest/configuration/optimization/)
-- [Sarathi-Serve, OSDI 2024](https://arxiv.org/abs/2403.02310)
+- [Applied inference chapter](https://liltom-eth.github.io/scaling-book-pytorch/chapters/applied-inference.html)
+- [H100 specifications](https://www.nvidia.com/en-us/data-center/h100/)
+- [Week 3: communication costs](https://zhiweixx.github.io/llm-systems-study-group/week-3/overview.html#slide-19)
 
-## 25. Admission must consider future KV growth
+## 25. Prefill reuses weights across thousands of tokens
 
-**Section: Scheduling**
+**Section: Case study · Llama 3.1 405B on 64 H100s**
 
-Active, retained and empty describe block-content states; retained blocks may already be in the allocator’s free queue. A retained block is not referenced by an active request, but its content may still be reused by a future prefix hit; reclaiming it loses that opportunity. In this toy, a new request requiring twenty blocks initially can be admitted by using the ten free blocks and evicting ten retained blocks. That leaves no free blocks and only ten more evictable blocks. Additional generation by all active requests can soon consume the remainder. This is why checking current prompt fit is not a complete admission policy. A conservative policy can account for maximum allowed future output, at the cost of admitting fewer requests; an optimistic policy can admit more and recover from pressure with preemption or other mechanisms. In a recomputation-based policy, freeing an active request's KV means its history must be processed again before it resumes. Repeated preemption can turn memory pressure into a throughput and latency problem. Observe preemption counts, cache-block state and queue age together. Admission may also reject or defer work according to an application's latency limit; a waiting queue alone cannot make sustained overload disappear.
+P = 405B and T = 8,192 give 2PT = 6.63552 PFLOPs for the leading dense forward work. Do not use the training approximation 6PT. For one unchunked prompt sent through TP8 × PP2, each stage does half the work on 8 GPUs: 6.63552e15 / (2 × 8 × 989e12) = 0.41933 s; the two stages sum to 0.83867 s. Using all 16 GPU peaks at once would assume the same prompt occupies both sequential stages simultaneously. Independent prompts, or a supported pipelined chunk schedule, can improve steady-state utilization; state those assumptions separately. The weight-only streaming floor is 30.2 ms. Under a weight-dominated linear model, BF16 arithmetic intensity is about 8,192 FLOP/byte, far above 989 TFLOP/s divided by 3.35 TB/s ≈ 295 FLOP/byte. Full prefill also includes causal attention, whose cost grows quadratically with sequence length; 2PT alone is not an exact model-wide count. Some embedding/output effects and kernel tiling also make the parameter-count approximation imperfect. Storage units are decimal: 1 GB = 10^9 bytes. The baseline uses the canonical architecture with 8 KV heads, BF16 weights, and BF16 KV unless explicitly changed. P = 405 billion is rounded; equal weight partitioning is a planning approximation. The baseline excludes prefix sharing, CPU offload, and a speculative draft model. No GPU measurements were run.
 
-- [vLLM: scheduler tuning](https://docs.vllm.ai/en/latest/configuration/optimization/)
+- [Applied inference chapter](https://liltom-eth.github.io/scaling-book-pytorch/chapters/applied-inference.html)
+- [H100 specifications](https://www.nvidia.com/en-us/data-center/h100/)
+- [Week 3: PP scheduling](https://zhiweixx.github.io/llm-systems-study-group/week-3/overview.html#slide-11)
 
-## 26. Routing balances prefix reuse against local load
+## 26. Long contexts make KV memory a limiting factor
 
-**Section: Deployment**
+**Section: Case study · Llama 3.1 405B on 64 H100s**
 
-These four boxes are the four one-GPU replicas from the case study. All hold the same model weights, but their queues and cached prefixes differ. The router makes a placement decision once for an incoming request in this simple architecture. Each local scheduler then repeatedly decides which requests and prompt chunks enter its next iteration. Routing and iteration scheduling solve different problems. A round-robin router ignores prefix locality, while always choosing the longest matching prefix can overload a hot replica. Prefix length also does not capture the work remaining in the local queue: a few very long requests can be more expensive than many short ones. A useful routing estimate compares expected waiting plus uncached prefill work, and considers memory pressure; implementations can use heuristics rather than accurate time predictions. SGLang's cache-aware policy is a concrete implementation that incorporates load-balancing behavior. The categorical states here are an authored diagram, not telemetry from that router. Moving already-active requests is a separate mechanism and can require KV transfer; it is not implied by this diagram.
+The canonical maximum context is 131,072 tokens, including generated output; the example is a near-limit cache snapshot, not a 131,072-token prompt with unlimited additional output. Unique BF16 KV = 516,096 × 131,072 = 67.645734912 GB per request. At B = 4, TP8 × PP2 divides the total KV by 16: 16.911433728 GB per GPU. Plain TP16 with duplicated heads divides it only by 8: 33.822867456 GB per GPU. Add approximately 50.625 GB of weights for TP8 × PP2 or 51.153 GB for TP16, including duplicated K/V projections, and the hypothetical 8 GB reserve. In vLLM 0.19.1, decode context parallelism for GQA reuses the TP group: TP16 + DCP2 divides cached positions between ranks that would otherwise duplicate a KV head. The 2× reduction is a logical KV-storage calculation, not a tested 405B deployment benchmark. It requires a compatible model, version, and attention backend. The implementation interleaves cached positions as the history grows; the diagram shows disjoint shares, not contiguous halves. The distributed attention path exchanges queries/results and merges softmax statistics, so saved memory does not establish a latency improvement. Week 3 CP provides the conceptual sequence partition; this versioned DCP implementation nests within TP rather than adding GPUs. Long-prefill context parallelism is a separate scheduling/communication choice. Storage units are decimal: 1 GB = 10^9 bytes. The baseline uses the canonical architecture with 8 KV heads, BF16 weights, and BF16 KV unless explicitly changed. P = 405 billion is rounded; equal weight partitioning is a planning approximation. The baseline excludes prefix sharing, CPU offload, and a speculative draft model. No GPU measurements were run.
 
-- [SGLang: cache-aware routing](https://github.com/sgl-project/sglang/blob/main/sgl-model-gateway/src/policies/cache_aware.rs)
+- [vLLM context parallelism](https://docs.vllm.ai/en/v0.19.1/serving/context_parallel_deployment/)
+- [Meta model configuration](https://github.com/meta-llama/llama-models/blob/main/models/sku_list.py)
+- [Week 3: context parallelism](https://zhiweixx.github.io/llm-systems-study-group/week-3/overview.html#slide-12)
 
-## 27. Compare shared and separate prefill/decode pools
+## 27. FP8 can fit a full replica on one node
 
-**Section: Deployment**
+**Section: Case study · Llama 3.1 405B on 64 H100s**
 
-Week 2 introduced prefill–decode disaggregation. Here the new issue is resource allocation and comparison fairness. The left design allows all four one-GPU replicas to switch between the two phases, applying chunked prefill to control interference. The right illustration assigns one GPU to prefill and three to decode. Each GPU still has a full copy of the model in this case; this is not pipeline parallelism. The prefill worker computes prompt KV and the state needed to continue generation is handed off to a selected decode worker. KV transfer, destination capacity and handoff scheduling can delay progress; transfer can sometimes overlap other work, so raw transfer duration is not necessarily wholly exposed. Separation can protect decode iterations from new prefill work and allows phase-specific tuning, but a busy prefill pool can leave decoders underused or vice versa. The illustrated 1:3 split is arbitrary. Select a split based on the workload and latency targets, and compare against a well-tuned shared-phase baseline at the same GPU count. Published DistServe results are workload- and configuration-specific; this slide claims no numerical speedup.
+Weight precision changes here, while KV stays BF16. The actual canonical architecture has approximately 405.853 billion parameters. Meta quantizes the three FFN matrices in the 124 middle layers: Q = 124 × 3 × 16384 × 53248 = 324.538 billion parameters. Attention, endpoint layers, embeddings and output weights remain BF16 in the cited loader. Stored weight bytes are Q + 2(P − Q) ≈ 487.168 GB, before scales; TP8 row scales bring the estimate to roughly 487.286 GB. Round to 61 GB per GPU for the capacity example. A single 8,192-token request uses 4.228 GB of BF16 KV across the TP8 replica, or 0.5285 GB per GPU. With the illustrative 8 GB reserve, the rounded budget fits about 20 such requests per replica. Ignoring scales narrowly suggests 21, which is too optimistic. Four BF16 replicas have about 320 slots at this context snapshot; eight mixed-FP8 replicas have about 160. This is not evidence that FP8 reduces throughput: latency, pipeline overhead, batching and kernel speeds also change. Keeping four replicas and using the saved weight memory for KV would be another valid design. NVIDIA NIM documents a separately optimized FP8 profile on eight H100 SXM GPUs; its recipe must not be equated with Meta’s. These analytical memory estimates do not establish runtime feasibility for every buffer shape or backend. Measure peak allocation and task quality with the actual checkpoint. Storage units are decimal: 1 GB = 10^9 bytes. The baseline uses the canonical architecture with 8 KV heads, BF16 weights, and BF16 KV unless explicitly changed. P = 405 billion is rounded; equal weight partitioning is a planning approximation. The baseline excludes prefix sharing, CPU offload, and a speculative draft model. No GPU measurements were run.
 
-- [DistServe, OSDI 2024](https://www.usenix.org/conference/osdi24/presentation/zhong-yinmin)
-- [vLLM: disaggregated prefill](https://docs.vllm.ai/en/latest/features/disagg_prefill/)
+- [Meta FP8 implementation](https://github.com/meta-llama/llama-models/blob/0e0b8c519242d5833d8c11bffc1232b77ad7f301/models/llama3/quantization/loader.py#L53-L96)
+- [NVIDIA 405B FP8 support](https://docs.nvidia.com/nim/large-language-models/1.13.0/supported-models.html#llama-3-1-405b-instruct)
 
-## 28. Question 2: Why do chat streams stall on long prompts?
+## 28. Turn the layout into a serving configuration
 
-**Section: Questions**
+**Section: Case study · Llama 3.1 405B on 64 H100s**
 
-This is an authored interview-style problem, not a question attributed to a particular company. Give participants around one minute before advancing to the solution. ITL is measured on the client-visible output stream. The table says that an isolated or matched-shape decode-only kernel interval remains similar; it does not say that the entire mixed iteration has unchanged runtime. The trace contains more prompt work in the intervals where chats wait. Thus the evidence points toward scheduling interference as a first hypothesis, while not proving that it is the only cause. Ask for a concrete experiment rather than a list of optimizations. The request trace, model, GPU count, cache condition and output lengths should be held fixed when comparing scheduler configurations. Good answers mention the effect on new requests' time to first token and total served work, as well as chat ITL. They also state what measurement would falsify the hypothesis and avoid jumping to a resource-unequal PD comparison.
+This is a configuration example based on vLLM 0.19.1 documentation, not a deployment executed in this session. Prerequisites are approved access to the model checkpoint, identical supported container/CUDA/NCCL/software versions on both servers, checkpoint availability, a two-node Ray cluster with 16 visible GPUs, and a configured inter-node network. Restrict one replica to exactly its pair of nodes, via isolated clusters or explicit resource placement; four unconstrained launches into one shared cluster can give unintended placement. Confirm each 8-rank TP group stays inside a server and PP links the two groups. Repeat across node pairs 0–1, 2–3, 4–5, and 6–7. The setting max-model-len = 16384 includes prompt plus generated tokens. The setting max-num-seqs = 32 is an initial concurrency cap rather than proof that every 32-request, 16k-context workload fits with all buffers. The earlier capacity example was a snapshot at 8,192 cached positions; recalibrate for allowed growth. Runtime GPU memory utilization and KV allocation settings are not equated to the teaching reserve of 8 GB. Prefix caching, speculative decoding, and quantization should be introduced only after this baseline is measured so their effects can be isolated. Storage units are decimal: 1 GB = 10^9 bytes. The baseline uses the canonical architecture with 8 KV heads, BF16 weights, and BF16 KV unless explicitly changed. P = 405 billion is rounded; equal weight partitioning is a planning approximation. The baseline excludes prefix sharing, CPU offload, and a speculative draft model. No GPU measurements were run.
 
-- [Sarathi-Serve, OSDI 2024](https://arxiv.org/abs/2403.02310)
-- [DistServe, OSDI 2024](https://www.usenix.org/conference/osdi24/presentation/zhong-yinmin)
+- [vLLM distributed serving](https://docs.vllm.ai/en/v0.19.1/serving/parallelism_scaling/)
+- [Week 3: combined layout](https://zhiweixx.github.io/llm-systems-study-group/week-3/overview.html#slide-17)
 
-## 29. Solution 2: Attribute the delay before changing deployment
+## 29. Which layout would we actually choose?
 
-**Section: Questions**
+**Section: Case study · Llama 3.1 405B on 64 H100s**
 
-First separate the duration of GPU kernels from the time between outputs seen by a request. A chat may wait while a mixed iteration performs additional prefill work. The primary controlled experiment replays the same mixed workload and varies the chunk size or iteration token budget while keeping other controls fixed. Collect per-round scheduled prompt/decode counts and duration, client ITL, TTFT, completions and preemption events. The expected tradeoff is less prefill added to each round but potentially more rounds and overhead before a new prompt completes. If ITL remains poor after mixed rounds become short, the original explanation is incomplete: inspect CPU scheduling or launch gaps, network buffering, cache misses, KV preemption and any changed kernel shapes. Use admission limits if offered load or KV growth exceeds sustainable capacity. PD is a further deployment comparison, not an automatic solution. Test resource splits under the same four-GPU budget and include transfer and destination waiting. A design that makes chats smoother but causes new requests to miss their first-token objective may be unacceptable. The final choice depends on the specified service objectives and workload distribution.
+This final slide returns to the original 64-GPU decision. The baseline is defensible from topology and Meta’s deployment, but is not proven optimal on an unspecified cluster. First compare 16-GPU replicas with fixed model precision, contexts, arrival traces, and cache state. For lower single-request ITL, TP16 may remove the PP serial-stage penalty, but only if collective overhead does not erase the gain. For long-context GQA, test TP16 + DCP2 and inspect attention communication. For FP8, revalidate quality, actual checkpoint bytes, kernel choices, and independent replica load distribution. At cluster scale, compare aggregate output tokens/s while holding explicit p95 TTFT and p95 ITL objectives, rather than comparing raw throughput alone. A peak-bandwidth bound is not a service-level promise. Use a profiler to separate compute, HBM traffic, exposed collectives, and pipeline gaps. This synthesizes Week 3: TP splits operators, PP splits layers, CP splits context, and replicas split independent requests. The 405B model is dense, so expert parallelism is not applicable. Training-oriented FSDP/ZeRO optimizer sharding is not the default for this persistent-weight inference case. Storage units are decimal: 1 GB = 10^9 bytes. The baseline uses the canonical architecture with 8 KV heads, BF16 weights, and BF16 KV unless explicitly changed. P = 405 billion is rounded; equal weight partitioning is a planning approximation. The baseline excludes prefix sharing, CPU offload, and a speculative draft model. No GPU measurements were run.
 
-- [Sarathi-Serve, OSDI 2024](https://arxiv.org/abs/2403.02310)
-- [DistServe, OSDI 2024](https://www.usenix.org/conference/osdi24/presentation/zhong-yinmin)
-
-## 30. Design the experiment before choosing the winner
-
-**Section: Benchmarking · 7 min**
-
-Replay identical request content and arrival patterns, ideally in several randomized trial orders. Warm kernels and compilation before timed runs, then explicitly establish the intended prefix-cache state. Turning off benchmark warmup requests does not clear a server cache. A cold-prefix test needs cache reset/restart or guaranteed unseen prefixes, with startup/compilation handled separately. Record cache configuration, exact model revision, engine/client versions and relevant server flags. Use per-workload breakdowns so short chats do not disappear inside an aggregate average. Production traces may have bursts and correlated shared prefixes; a random fixed-length benchmark is only a controlled baseline.
-
-- [vLLM benchmark CLI](https://docs.vllm.ai/en/latest/cli/bench/serve/)
-
-## 31. Request rate and concurrency are different controls
-
-**Section: Benchmarking · 7 min**
-
-The left is a closed-loop client. Its achieved request rate drops automatically when requests take longer; it can mask an overloaded open-loop service. The right schedules arrivals independently of completion, for example with Poisson inter-arrival times. Real tools may limit concurrency or be client-CPU bound, so verify actual dispatch timestamps and report client-side queuing separately. The number of in-flight requests is an outcome of arrival rate and request duration in an open-loop test; it is not synonymous with engine decode batch size. Both tests are useful but should not be compared as if they had identical demand.
-
-- [vLLM benchmark CLI](https://docs.vllm.ai/en/latest/cli/bench/serve/)
-
-## 32. More throughput can still violate the service target
-
-**Section: Benchmarking · 7 min**
-
-These values are authored for interpretation, not fitted or measured. Assume stable intervals, no errors and matched arrivals/completions so the rates can be multiplied directly. The pass fraction counts requests satisfying BOTH latency conditions, not the product of two independent percentile pass rates. Goodput here means passing completed requests per second. Even a higher absolute goodput can violate a required 95% attainment fraction, so both matter. The largest tested passing rate only brackets capacity; finer sweeps, longer runs, failures and bursts may change the choice. In a finite run with queue drain, report offered rate, achieved dispatch rate, measurement duration and completion window rather than assuming they coincide. Inspect per-request ITL tails in addition to TPOT.
-
-- [DistServe §2–3](https://www.usenix.org/system/files/osdi24-zhong-yinmin.pdf)
-- [vLLM benchmark CLI](https://docs.vllm.ai/en/latest/cli/bench/serve/)
-
-## 33. Connect a bad user metric to an engine cause
-
-**Section: Benchmarking · 7 min**
-
-Each row is a hypothesis test, not a lookup table guaranteeing the cause. For example, long mixed rounds plus unchanged isolated decode-kernel times supports scheduler interference; if token stalls persist when long prompts are removed, investigate host stalls or network buffering. For a full KV pool, separate active references from idle retained cache blocks: evictable cached data may be healthy use of memory. Recomputations and queue growth are stronger evidence of pressure. In PD, destination idleness can result from a slow prefill stage or transfer starvation; examine stage timelines. Keep the four-GPU budget, model and input trace fixed.
-
-- [vLLM metrics](https://docs.vllm.ai/en/latest/design/metrics/)
-- [DistServe §2–3](https://www.usenix.org/system/files/osdi24-zhong-yinmin.pdf)
-
-## 34. A reproducible serving experiment
-
-**Section: Benchmarking · 7 min**
-
-Optional work after the meeting. The script requires a working endpoint and a compatible vLLM benchmark client; it does not start a server or allocate GPUs. Inspect the printed commands before using --run. The default fixed-length random requests isolate load and do not test prefix reuse. The README explains a separate prefix-trace extension and how to distinguish warm kernels from warmed KV prefixes. Use enough samples and repetitions for stable tail estimates: 200 requests is an inexpensive starting run, not enough to claim robust p99 under arbitrary variability. Record offered and achieved rate, prompt/output lengths, server config and software versions. Full commands and per-request data are more useful than a single tokens/s number.
-
-- [Companion lab](https://zhiweixx.github.io/llm-systems-study-group/week-4/lab.html)
-- [vLLM benchmark CLI](https://docs.vllm.ai/en/latest/cli/bench/serve/)
-
-## 35. Discussion: defend a serving decision with evidence
-
-**Section: Discussion · 15 min**
-
-Close the main route here. Divide the group into workload, policy and measurement roles. Have each group state a baseline, one intervention, an expected observation and a result that would falsify it. A useful answer must say what is held constant; “add more GPUs” avoids the fixed-budget question. Discuss fairness: optimizing overall throughput may leave a class of long requests with unacceptable waits, while aggressively favoring chat may starve document requests. The two worked question solutions provide candidate experiments but no universal winner. Speculative decoding is another candidate intervention: measure both per-stream latency and capacity under concurrent load.
+- [Applied inference chapter](https://liltom-eth.github.io/scaling-book-pytorch/chapters/applied-inference.html)
+- [Llama 3 paper §6](https://arxiv.org/html/2407.21783v3#S6)
+- [Week 3: topology](https://zhiweixx.github.io/llm-systems-study-group/week-3/overview.html#slide-18)
+- [vLLM distributed serving](https://docs.vllm.ai/en/v0.19.1/serving/parallelism_scaling/)

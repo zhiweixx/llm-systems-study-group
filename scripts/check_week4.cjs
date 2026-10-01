@@ -12,14 +12,15 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'.build/week4-qa');
  await page.goto('file://'+path.join(root,'week-4-serving.html'));
  const settle=()=>page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));await settle();
  const slides=await page.locator('.slide').evaluateAll(ss=>ss.map(s=>({id:s.id,title:s.dataset.title,section:s.dataset.section})));
- assert.equal(slides.length,35);
+ assert.equal(slides.length,29);
  assert.ok(slides.slice(1,11).every(s=>s.section.startsWith('Speculative decoding')));
  assert.ok(slides.slice(5,11).every(s=>s.section.startsWith('Speculative decoding theory')));
  assert.ok(slides[5].title.startsWith('Quiz:'));
  assert.ok(slides[6].title.startsWith('Quiz solution:'));
  assert.ok(slides[7].title.startsWith('Why speculative sampling is exact'));
- assert.ok(slides[19].title.startsWith('Question 1'));
- assert.ok(slides[27].title.startsWith('Question 2'));
+ assert.equal(slides[16].title,'Serve a 405B model on eight H100 nodes');
+ assert.ok(slides.slice(16).every(s=>s.section.startsWith('Case study')));
+ assert.equal(slides[28].title,'Which layout would we actually choose?');
  const inspect=async label=>{
   const result=await page.locator('.slide:not([hidden])>svg').evaluate(svg=>{
    const visible=e=>{const r=e.getBoundingClientRect();return r.width>0&&r.height>0&&getComputedStyle(e).visibility!=='hidden';};
