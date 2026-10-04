@@ -1,4 +1,4 @@
-/* Week 5 conversion QA: local resources, navigation, layout, print, and PDF fidelity.
+/* Week 5 restyle QA: academic frame, navigation, layout, print, and source-body fidelity.
  * Run with Playwright on NODE_PATH. Outputs stay under .build/week5-qa/.
  */
 const fs = require('node:fs/promises');
@@ -45,6 +45,19 @@ function check(name, ok, details) {
     })));
     check('49 original pages, in order', report.slides.length === 49 && report.slides.every((slide, i) => slide.id === `slide-${i + 1}`), report.slides.map(slide => slide.id));
     check('one direct-child SVG per page', report.slides.every(slide => slide.svgCount === 1));
+    check('all frames use the established 1600 by 900 stage', report.slides.every(slide => slide.svgViewBox === '0 0 1600 900'));
+    const headings = await page.locator('.slide-heading').evaluateAll(elements => elements.map(element => ({
+      text: element.textContent.trim(), x: Number(element.getAttribute('x')), y: Number(element.getAttribute('y')),
+      fill: element.getAttribute('fill'), size: Number(element.getAttribute('font-size'))
+    })));
+    check('all 49 titles use the academic heading style', headings.length === 49 && headings.every((heading, index) => heading.text === (index === 0 ? 'Linear Attention' : report.slides[index].title) && heading.x === 75 && heading.y === 98 && heading.fill === '#245675' && heading.size > 0 && heading.size <= 46), headings);
+    const bodies = await page.locator('.source-body').evaluateAll(elements => elements.map(element => ({
+      page: Number(element.closest('.slide').id.replace('slide-', '')), viewBox: element.getAttribute('viewBox'),
+      x: Number(element.getAttribute('x')), y: Number(element.getAttribute('y')),
+      width: Number(element.getAttribute('width')), height: Number(element.getAttribute('height'))
+    })));
+    check('48 source bodies retain their complete content viewport', bodies.length === 48 && bodies.every(body => body.viewBox === '28 58 664 302' && body.x === 75 && body.y === 171 && body.width === 1450 && Math.abs(body.height - 302 * 1450 / 664) < 0.1 && body.y + body.height < 838), bodies);
+    report.sourceBodies = bodies;
     const duplicateIds = await page.locator('[id]').evaluateAll(elements => {
       const counts = new Map();
       elements.forEach(element => counts.set(element.id, (counts.get(element.id) || 0) + 1));
@@ -135,9 +148,30 @@ function check(name, ok, details) {
       const svg = page.locator('.slide:not([hidden]) > svg');
       const bounds = await svg.boundingBox();
       check(`page ${index + 1} renders within slide viewport`, bounds && bounds.width > 0 && bounds.height > 0 && bounds.x >= -1 && bounds.y >= -1 && bounds.x + bounds.width <= 1281 && bounds.y + bounds.height <= 771, bounds);
+      const frame = await svg.evaluate(element => {
+        const measure = selector => [...element.querySelectorAll(selector)].map(node => {
+          const box = node.getBBox();
+          return { text: node.textContent.trim(), x: box.x, y: box.y, width: box.width, height: box.height, size: Number(node.getAttribute('font-size')) };
+        });
+        return { headings: measure('.slide-heading'), references: measure('.source-reference'), numbers: measure('.slide-number') };
+      });
+      check(`page ${index + 1} heading fits above the divider`, frame.headings.length === 1 && frame.headings.every(box => box.x >= 74 && box.x + box.width <= 1526 && box.y >= 25 && box.y + box.height < 130), frame.headings);
+      check(`page ${index + 1} footer is readable and in bounds`, frame.references.length >= 1 && frame.references.every(box => box.size >= 16 && box.x >= 74 && box.x + box.width <= 1450 && box.y >= 838 && box.y + box.height <= 896) && frame.numbers.length === 1 && frame.numbers[0].text === `${index + 1} / 49` && frame.numbers[0].x + frame.numbers[0].width <= 1526, frame);
+      const body = page.locator('.slide:not([hidden]) .source-body');
+      let bodyDetails = null;
+      if (await body.count()) {
+        const bodyFilename = `body-${String(index + 1).padStart(2, '0')}.png`;
+        // A nested SVG's bounding box includes unclipped source artwork.
+        // Capture its actual viewport using native x/y/width/height, mapped
+        // through the outer slide's scale, rather than its artwork bounds.
+        const viewport = await body.evaluate(element => ({ x: Number(element.getAttribute('x')), y: Number(element.getAttribute('y')), width: Number(element.getAttribute('width')), height: Number(element.getAttribute('height')) }));
+        const bodyClip = { x: bounds.x + viewport.x * bounds.width / 1600, y: bounds.y + viewport.y * bounds.height / 900, width: viewport.width * bounds.width / 1600, height: viewport.height * bounds.height / 900 };
+        await page.screenshot({ path: path.join(out, bodyFilename), clip: bodyClip, animations: 'disabled' });
+        bodyDetails = { file: bodyFilename, bounds: bodyClip, viewBox: await body.getAttribute('viewBox') };
+      }
       const filename = `slide-${String(index + 1).padStart(2, '0')}.png`;
       await page.screenshot({ path: path.join(out, filename), animations: 'disabled' });
-      report.screenshots.push({ page: index + 1, file: filename, bounds });
+      report.screenshots.push({ page: index + 1, file: filename, bounds, body: bodyDetails });
     }
     for (const [width, height] of [[1600, 950], [1280, 770], [1024, 650], [768, 560], [390, 844]]) {
       await page.setViewportSize({ width, height });
@@ -191,31 +225,64 @@ function check(name, ok, details) {
     const comparison = String.raw`
 import json,sys
 from pathlib import Path
-from PIL import Image,ImageChops,ImageStat,ImageDraw
+from PIL import Image,ImageChops,ImageStat,ImageDraw,ImageFilter
 root=Path(sys.argv[1]); out=root/'.build/week5-qa'; source=out/'source-exact'
-report=json.loads((out/'review.json').read_text()); comparisons=[]; thumbs=[]
+report=json.loads((out/'review.json').read_text()); comparisons=[]; thumbs=[]; body_thumbs=[]
 for shot in report['screenshots']:
     i=shot['page']; source_path=source/f'page-{i:02d}.png'
     if not source_path.exists(): continue
     image=Image.open(out/shot['file']).convert('RGB'); b=shot['bounds']
     crop=image.crop((round(b['x']),round(b['y']),round(b['x']+b['width']),round(b['y']+b['height'])))
-    original=Image.open(source_path).convert('RGB').resize(crop.size,Image.Resampling.LANCZOS)
-    diff=ImageChops.difference(original,crop); stat=ImageStat.Stat(diff)
-    hist=diff.convert('L').histogram(); changed=sum(hist[48:])/sum(hist)
-    comparisons.append({'page':i,'meanAbsoluteRgbDifference':round(sum(stat.mean)/3,4),'fractionPixelsDifferenceAbove48':round(changed,6),'expectedTitleChanges':i==1})
+    original=Image.open(source_path).convert('RGB')
+    comparison={'page':i,'expectedTemplateChanges':True,'bodyCompared':False}
+    if shot.get('body'):
+        actual=Image.open(out/shot['body']['file']).convert('RGB')
+        x,y,w,h=map(float,shot['body']['viewBox'].split())
+        sw,sh=original.size
+        extent=(x/720*sw,y/405.014173228346*sh,(x+w)/720*sw,(y+h)/405.014173228346*sh)
+        expected=original.transform(actual.size,Image.Transform.EXTENT,extent,Image.Resampling.BICUBIC)
+        # The original background's navy footer starts at about y355.5pt.
+        # It is intentionally removed; real source body content ends by354.2pt.
+        cutoff=round((355-y)/h*actual.height)
+        expected=expected.crop((0,0,expected.width,cutoff)); actual=actual.crop((0,0,actual.width,cutoff))
+        # Frame and vector theme colors intentionally change. Geometry, math,
+        # diagrams, tables, and ordinary body copy should remain in place.
+        if i==49:
+            # The source falsely refers to speaker notes absent from its PDF.
+            # That administrative line is intentionally removed in this edition.
+            cutoff=round((320-y)/h*actual.height)
+            expected=expected.crop((0,0,expected.width,cutoff)); actual=actual.crop((0,0,actual.width,cutoff))
+            comparison['excludedSourceNoteClaim']=True
+        diff=ImageChops.difference(expected,actual); stat=ImageStat.Stat(diff)
+        hist=diff.convert('L').histogram(); changed=sum(hist[48:])/sum(hist)
+        masks=[im.convert('L').point(lambda value:255 if value<225 else 0) for im in (expected,actual)]
+        counts=[sum(mask.histogram()[1:]) for mask in masks]
+        # Ignore only a one-pixel antialiasing edge around foreground geometry.
+        missing=ImageChops.subtract(masks[0],masks[1].filter(ImageFilter.MaxFilter(3)))
+        added=ImageChops.subtract(masks[1],masks[0].filter(ImageFilter.MaxFilter(3)))
+        comparison.update(bodyCompared=True,meanAbsoluteRgbDifference=round(sum(stat.mean)/3,4),fractionPixelsDifferenceAbove48=round(changed,6),fractionMissingForeground=round(sum(missing.histogram()[1:])/max(1,counts[0]),6),fractionAddedForeground=round(sum(added.histogram()[1:])/max(1,counts[1]),6))
+        bw=560; bh=round(bw*actual.height/actual.width)
+        pair=Image.new('RGB',(1120,bh+24),'#ededed'); draw=ImageDraw.Draw(pair)
+        draw.text((8,4),f'{i:02d} source body',fill='black'); draw.text((568,4),f'{i:02d} restyled body',fill='black')
+        pair.paste(expected.resize((bw,bh),Image.Resampling.LANCZOS),(0,24)); pair.paste(actual.resize((bw,bh),Image.Resampling.LANCZOS),(560,24)); body_thumbs.append(pair)
+    comparisons.append(comparison)
     row=Image.new('RGB',(640,202),'#ededed'); draw=ImageDraw.Draw(row)
-    draw.text((8,3),f'{i:02d} source',fill='black'); draw.text((328,3),f'{i:02d} HTML',fill='black')
+    draw.text((8,3),f'{i:02d} source',fill='black'); draw.text((328,3),f'{i:02d} academic template',fill='black')
     row.paste(original.resize((320,180),Image.Resampling.LANCZOS),(0,22)); row.paste(crop.resize((320,180),Image.Resampling.LANCZOS),(320,22)); thumbs.append(row)
 for start in range(0,len(thumbs),12):
     batch=thumbs[start:start+12]; sheet=Image.new('RGB',(1280,202*((len(batch)+1)//2)),'white')
     for i,thumb in enumerate(batch): sheet.paste(thumb,((i%2)*640,(i//2)*202))
     sheet.save(out/f'comparison-{start+1:02d}-{start+len(batch):02d}.png')
+for start in range(0,len(body_thumbs),6):
+    batch=body_thumbs[start:start+6]; sheet=Image.new('RGB',(1120,sum(pair.height for pair in batch)),'white'); y=0
+    for pair in batch: sheet.paste(pair,(0,y)); y+=pair.height
+    sheet.save(out/f'body-comparison-{start+2:02d}-{start+len(batch)+1:02d}.png')
 print(json.dumps(comparisons))
 `;
     report.visualComparison = JSON.parse(execFileSync(python, ['-c', comparison, root], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 }));
-    report.visualWarnings = report.visualComparison.filter(item => !item.expectedTitleChanges && (item.meanAbsoluteRgbDifference > 8 || item.fractionPixelsDifferenceAbove48 > 0.05));
-    check('source comparisons available for all pages', report.visualComparison.length === 49, { compared: report.visualComparison.length });
-    check('no large visual differences outside intentional title edits', report.visualWarnings.length === 0, report.visualWarnings);
+    report.visualWarnings = report.visualComparison.filter(item => item.bodyCompared && (item.fractionMissingForeground > 0.04 || item.fractionAddedForeground > 0.04));
+    check('source comparisons available for all pages', report.visualComparison.length === 49 && report.visualComparison.filter(item => item.bodyCompared).length === 48, { compared: report.visualComparison.length, sourceBodies: report.visualComparison.filter(item => item.bodyCompared).length });
+    check('source body content survives the intentional template change', report.visualWarnings.length === 0, report.visualWarnings);
   } catch (error) {
     report.fatal = error.stack;
     check('QA run completes', false, error.message);
