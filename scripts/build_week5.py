@@ -153,8 +153,7 @@ def frame(number, title, body, citations, count):
                 + text(75, 350, "Gated DeltaNet &", 62, BLUE, 700)
                 + text(75, 426, "Kimi Delta Attention", 62, BLUE, 700)
                 + line(494)
-                + text(75, 565, "Original slides by Gaotang Li", 36, INK, 700, 'id="author-credit"')
-                + text(75, 617, "IDEA–ISAIL Reading Group", 28, MUTED))
+                + text(75, 565, "Original slides by Gaotang Li", 36, INK, 700, 'id="author-credit"'))
         citations = ["Linear attention, recurrent memory, and chunkwise parallelism"]
     # The source references slide incorrectly points to unavailable PDF notes.
     if number == 49:
@@ -189,6 +188,7 @@ def build():
         transcript = page.extract_text() or ""
         title = "Linear Attention: Gated DeltaNet & Kimi Delta Attention" if number == 1 else transcript.splitlines()[0]
         if number == 1:
+            transcript = transcript.replace("IDEA–ISAIL Reading Group", "").strip()
             transcript += "\nOriginal slides by Gaotang Li\nLLM Systems Study Group · Week 5"
         if number == 49:
             transcript = transcript.replace("Additional references and source URLs appear in the slide notes.", "")
