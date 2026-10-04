@@ -38,6 +38,7 @@ def main():
         "week-3/slides.html", "week-3/speaker-notes.html",
         "week-3/overview.html", "week-3/overview-notes.html",
         "week-4/prefix-cache.html", "week-4/slides.html", "week-4/speaker-notes.html", "week-4/lab.html",
+        "week-5/slides.html",
     }
     assert {str(path.relative_to(OUT.resolve())) for path in pages} == expected_routes, "Unexpected or missing published HTML routes"
     checked = 0
@@ -65,7 +66,8 @@ def main():
             ("week-2-inference.html", "week-2/slides.html", 31),
             ("week-3-parallelism.html", "week-3/slides.html", 50),
             ("week-3-parallelism-overview.html", "week-3/overview.html", 22),
-            ("week-4-serving.html", "week-4/slides.html", 30)):
+            ("week-4-serving.html", "week-4/slides.html", 30),
+            ("week-5-linear-attention.html", "week-5/slides.html", 49)):
         source = (ROOT / source_name).read_bytes()
         assert (OUT / route).read_bytes() == source, f"Slide output differs from source: {route}"
         slide_page = pages[(OUT / route).resolve()]
@@ -78,7 +80,7 @@ def main():
     assert (OUT / "week-3/tp-exercise.py").read_bytes() == (ROOT / "week-3-tp-exercise.py").read_bytes(), "Week 3 exercise output differs from source"
     assert (OUT / "week-4/lab/run_benchmark.py").read_bytes() == (ROOT / "week-4-lab/run_benchmark.py").read_bytes()
     assert (OUT / ".nojekyll").exists()
-    print(f"Validated {len(pages)} HTML pages, {checked} local links/anchors, 24 Week 1 slides, 31 Week 2 slides, Week 3 decks of 50 and 22 slides, 30 Week 4 slides, exercise downloads, and publication boundaries.")
+    print(f"Validated {len(pages)} HTML pages, {checked} local links/anchors, 24 Week 1 slides, 31 Week 2 slides, Week 3 decks of 50 and 22 slides, 30 Week 4 slides, 49 Week 5 slides, exercise downloads, and publication boundaries.")
 
 
 if __name__ == "__main__":

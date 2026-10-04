@@ -31,6 +31,12 @@
 !/week-4-lab/README.md
 !/week-4-lab/run_benchmark.py
 !/week-4-prefix-cache-notes.md
+!/week-5-linear-attention.html
+!/sources/
+/sources/*
+!/sources/week-5/
+/sources/week-5/*
+!/sources/week-5/Linear_Attention_gaotang_li.pdf
 !/site/
 !/scripts/
 !/.github/

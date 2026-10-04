@@ -1,8 +1,8 @@
 # LLM Systems Study Group
 
-Slides, worked questions, cheatsheets, and references for a four-week study group on GPUs, LLM systems, inference, and model serving.
+Slides, worked questions, cheatsheets, and references for a study group on GPUs, LLM systems, inference, model serving, and linear attention.
 
-**[Live site](https://zhiweixx.github.io/llm-systems-study-group/)** · **[Present Week 1](https://zhiweixx.github.io/llm-systems-study-group/week-1/slides.html#slide-1)** · **[Present Week 2](https://zhiweixx.github.io/llm-systems-study-group/week-2/slides.html#slide-1)** · **[Present Week 3](https://zhiweixx.github.io/llm-systems-study-group/week-3/slides.html#slide-1)** · **[Present Week 4](https://zhiweixx.github.io/llm-systems-study-group/week-4/slides.html#slide-1)**
+**[Live site](https://zhiweixx.github.io/llm-systems-study-group/)** · **[Present Week 1](https://zhiweixx.github.io/llm-systems-study-group/week-1/slides.html#slide-1)** · **[Present Week 2](https://zhiweixx.github.io/llm-systems-study-group/week-2/slides.html#slide-1)** · **[Present Week 3](https://zhiweixx.github.io/llm-systems-study-group/week-3/slides.html#slide-1)** · **[Present Week 4](https://zhiweixx.github.io/llm-systems-study-group/week-4/slides.html#slide-1)** · **[Present Week 5](https://zhiweixx.github.io/llm-systems-study-group/week-5/slides.html#slide-1)**
 
 The audience knows Transformer models and PyTorch but has little GPU systems background. Materials use a plain academic style and state the assumptions behind calculations.
 
@@ -14,6 +14,7 @@ The audience knows Transformer models and PyTorch but has little GPU systems bac
 | 2 | LLM inference performance | [31-slide presentation](week-2-inference.html), [speaker notes](week-2-speaker-notes.md), [benchmark lab](week-2-lab/README.md) |
 | 3 | Multi-GPU parallelism and sharding | [22-slide visual overview](week-3-parallelism-overview.html), [overview notes](week-3-overview-speaker-notes.md), [50-slide reference](week-3-parallelism.html), [reference notes](week-3-speaker-notes.md), [PyTorch exercise](week-3-tp-exercise.py) |
 | 4 | Speculative decoding and LLM serving | [30-slide presentation](week-4-serving.html), [speaker notes](week-4-speaker-notes.md), [optional serving lab](week-4-lab/README.md) |
+| 5 | Linear attention | [49-slide presentation](week-5-linear-attention.html), converted from Gaotang Li’s [original PDF](sources/week-5/Linear_Attention_gaotang_li.pdf) |
 
 Week 1 is dated **September 10, 2026**, with a 30-minute presentation. The story connects GPU memory traffic to lower precision, fusion, coalescing, and tiling, then applies the ideas to memory budgets and MFU. Memory calculations use decimal GB and MB. Each of Questions 1–2 has a separate solution slide immediately afterward. Prefix-cache hit rates are reserved for Week 4. The full plan is in [curriculum.md](curriculum.md).
 
@@ -32,6 +33,8 @@ Slides 13–25 apply Week 3's sharding methods to **serving Llama 3.1 405B on ei
 The final section starts with the request lifecycle on slide 26, then follows successive model calls within one coding-agent session on slides 27–30. It explains how tool outputs grow the prompt, what token cache hit rate measures, and why editing old context invalidates later KV states. An interactive example on slide 30 compares retaining history, compacting it, and reusing the compacted history on the next call.
 
 The 30-slide presentation is an expanded teaching deck with no fixed presentation duration. Use the Slides menu to select sections. The sampling quiz has an immediate solution; the serving case develops its calculations and tradeoffs across successive slides. Analytical performance estimates are not GPU measurements. The optional companion lab prints reproducible vLLM benchmark commands by default and runs them only with `--run`; it remains available as a separate measurement exercise.
+
+Week 5 converts Gaotang Li’s *Linear Attention* deck into a **49-slide** standalone HTML presentation, retaining the source sequence and appendix. Topics include linear attention, DeltaNet, Gated DeltaNet, Kimi Delta Attention, and chunkwise parallelism. Gaotang Li is credited at the beginning of the presentation; the [original PDF](sources/week-5/Linear_Attention_gaotang_li.pdf) is preserved in the repository.
 
 ## Presenting and sharing
 
@@ -55,6 +58,7 @@ Share the live site URL for the complete materials, or a direct slide link such 
 - For Week 3, edit the content modules in `scripts/week3/` and the frame generator `scripts/build_week3.py`, or `site/slide-assets/week3/` for controls and styling. Run `.venv/bin/python scripts/build_week3.py` to regenerate `week-3-parallelism.html` and `week-3-speaker-notes.md`. Edit `week-3-tp-exercise.py` for the runnable companion.
 - For the separate Week 3 overview, edit `scripts/week3/overview_*.py` and run `.venv/bin/python scripts/build_week3_overview.py`. Check it with `scripts/check_week3_overview.cjs`; this build does not modify the 50-slide deck.
 - For Week 4, edit `scripts/week4/` and `site/slide-assets/week4/`, then run `.venv/bin/python scripts/build_week4.py`. Run `scripts/check_week4.cjs` with Playwright and Chrome for layout, navigation, interaction, and print checks. The optional serving experiment is in `week-4-lab/`.
+- For Week 5, `scripts/build_week5.py` converts the original PDF in `sources/week-5/` to vector SVG pages embedded in `week-5-linear-attention.html`. Regeneration requires Python with `pypdf` and Poppler’s `pdftocairo`. Edit the converter for attribution or presentation controls, and run `scripts/check_week5.cjs` with Playwright and Chrome to check fidelity, navigation, and printing. Preserve the attribution to Gaotang Li and the original PDF.
 - Edit the Markdown sources for the cheatsheet, speaker notes, curriculum, and references.
 - Edit `site/index.html`, `site/page.html`, and `site/styles.css` for the site layout.
 - Push to `main`. GitHub Actions rebuilds and publishes the site automatically.
