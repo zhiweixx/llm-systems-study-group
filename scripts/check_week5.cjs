@@ -56,7 +56,8 @@ function check(name, ok, details) {
       x: Number(element.getAttribute('x')), y: Number(element.getAttribute('y')),
       width: Number(element.getAttribute('width')), height: Number(element.getAttribute('height'))
     })));
-    check('48 source bodies retain their complete content viewport', bodies.length === 48 && bodies.every(body => body.viewBox === '28 58 664 302' && body.x === 75 && body.y === 171 && body.width === 1450 && Math.abs(body.height - 302 * 1450 / 664) < 0.1 && body.y + body.height < 838), bodies);
+    // Pages 1 and 9 are native content: the credited title and the annotated GDN update.
+    check('47 unchanged source bodies retain their complete content viewport', bodies.length === 47 && bodies.every(body => body.page !== 9 && body.viewBox === '28 58 664 302' && body.x === 75 && body.y === 171 && body.width === 1450 && Math.abs(body.height - 302 * 1450 / 664) < 0.1 && body.y + body.height < 838), bodies);
     report.sourceBodies = bodies;
     const duplicateIds = await page.locator('[id]').evaluateAll(elements => {
       const counts = new Map();
@@ -281,7 +282,7 @@ print(json.dumps(comparisons))
 `;
     report.visualComparison = JSON.parse(execFileSync(python, ['-c', comparison, root], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 }));
     report.visualWarnings = report.visualComparison.filter(item => item.bodyCompared && (item.fractionMissingForeground > 0.04 || item.fractionAddedForeground > 0.04));
-    check('source comparisons available for all pages', report.visualComparison.length === 49 && report.visualComparison.filter(item => item.bodyCompared).length === 48, { compared: report.visualComparison.length, sourceBodies: report.visualComparison.filter(item => item.bodyCompared).length });
+    check('source comparisons available for all unchanged bodies', report.visualComparison.length === 49 && report.visualComparison.filter(item => item.bodyCompared).length === 47, { compared: report.visualComparison.length, sourceBodies: report.visualComparison.filter(item => item.bodyCompared).length });
     check('source body content survives the intentional template change', report.visualWarnings.length === 0, report.visualWarnings);
   } catch (error) {
     report.fatal = error.stack;

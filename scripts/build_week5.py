@@ -122,7 +122,7 @@ def source_body(number, svg):
 
 
 def convert_page(number, executable):
-    if number == 1:
+    if number in (1, 9):
         return ""
     target = BUILD / "svg" / f"page-{number:02}.svg"
     subprocess.run(
@@ -146,6 +146,57 @@ def convert_page(number, executable):
     return svg
 
 
+def gdn_update_body():
+    """Retain the GDN equations and add the requested annotated special case."""
+    def sub(symbol, index="t"):
+        return f'<msub><mi>{symbol}</mi><mrow>{index}</mrow></msub>'
+
+    def transpose(symbol):
+        return f'<msubsup><mi>{symbol}</mi><mi>t</mi><mo>⊤</mo></msubsup>'
+
+    def equation(y, formula, height=76, size=40):
+        return (f'<foreignObject x="75" y="{y}" width="1450" height="{height}">'
+                f'<div xmlns="http://www.w3.org/1999/xhtml" class="gdn-math" style="font-size:{size}px">'
+                f'<math xmlns="http://www.w3.org/1998/Math/MathML" display="block">{formula}</math>'
+                '</div></foreignObject>')
+
+    def annotated(term, label, reference):
+        # Match the bases' height/depth without changing their widths.
+        strut = '<mpadded width="0"><mphantom><mrow>' + reference + '</mrow></mphantom></mpadded>'
+        return ('<munder><munder accentunder="true"><mrow>' + strut + term
+                + '</mrow><mo stretchy="true">⏟</mo></munder>'
+                + '<mrow style="font-size:24px">' + label + '</mrow></munder>')
+
+    st, kt, vt = sub("S", "<mi>t</mi>"), sub("k", "<mi>t</mi>"), sub("v", "<mi>t</mi>")
+    previous = sub("S", "<mi>t</mi><mo>−</mo><mn>1</mn>")
+    alpha, beta = sub("α", "<mi>t</mi>"), sub("β", "<mi>t</mi>")
+    bar = '<msub><mover accent="true"><mi>S</mi><mo>¯</mo></mover><mi>t</mi></msub>'
+    k_transpose, v_transpose = transpose("k"), transpose("v")
+    body = text(75, 205, "Scalar decay weakens old memory before the new association is written.", 30, INK, 700)
+    body += equation(248, bar + '<mo>=</mo>' + alpha + previous
+                     + '<mo>,</mo><mspace width="1.4em"/>' + st + '<mo>=</mo>' + bar
+                     + '<mo>+</mo>' + beta + kt + '<mo>(</mo>' + v_transpose
+                     + '<mo>−</mo>' + k_transpose + bar + '<mo>)</mo>')
+    body += equation(347, st + '<mo>=</mo>' + alpha + '<mo>(</mo><mi>I</mi><mo>−</mo>'
+                     + beta + kt + k_transpose + '<mo>)</mo>' + previous
+                     + '<mo>+</mo>' + beta + kt + v_transpose)
+    body += line(442)
+    body += equation(468, '<mtext>When</mtext><mspace width="0.3em"/>' + beta
+                     + '<mo>=</mo><mn>1</mn><mspace width="0.4em"/><mtext>and</mtext><mspace width="0.4em"/>'
+                     + '<msub><mrow><mo stretchy="false">‖</mo>' + kt + '<mo stretchy="false">‖</mo></mrow><mn>2</mn></msub>'
+                     + '<mo>=</mo><mn>1</mn><mo>:</mo>', 62, 28)
+    old_term = '<mo>(</mo><mi>I</mi><mo>−</mo>' + kt + k_transpose + '<mo>)</mo>' + bar
+    body += equation(542, st + '<mo>=</mo>'
+                     + annotated(old_term, '<mtext>Remove the old component along</mtext><mspace width="0.25em"/>' + kt, old_term)
+                     + '<mspace width="0.5em"/><mo>+</mo><mspace width="0.5em"/>'
+                     + annotated(kt + v_transpose, '<mtext>Write the new</mtext><mspace width="0.25em"/>' + kt
+                                 + '<mo>→</mo>' + vt + '<mspace width="0.25em"/><mtext>association</mtext>', old_term), 143, 42)
+    body += text(75, 746, "αₜ: global retention", 30, BLUE)
+    body += text(465, 746, "βₜ: correction at the current key", 30, BLUE)
+    body += text(75, 793, "Both gates come from the input and can be computed in advance.", 27)
+    return '<g id="gdn-annotated-update">' + body + '</g>'
+
+
 def frame(number, title, body, citations, count):
     if number == 1:
         title = "Linear Attention"
@@ -155,6 +206,8 @@ def frame(number, title, body, citations, count):
                 + line(494)
                 + text(75, 565, "Original slides by Gaotang Li", 36, INK, 700, 'id="author-credit"'))
         citations = ["Linear attention, recurrent memory, and chunkwise parallelism"]
+    elif number == 9:
+        body = gdn_update_body()
     # The source references slide incorrectly points to unavailable PDF notes.
     if number == 49:
         citations = ["Original slides by Gaotang Li"]
@@ -194,6 +247,12 @@ def build():
             transcript = transcript.replace("Additional references and source URLs appear in the slide notes.", "")
             transcript = transcript.replace("Full source links and supplementary references are included in the notes.", "")
             transcript += "\nOriginal slides by Gaotang Li"
+        if number == 9:
+            transcript = transcript.replace("frees memory", "weakens old memory")
+            transcript += ("\nWhen beta_t = 1 and ||k_t||_2 = 1: "
+                           "S_t = (I - k_t k_t^T) bar(S_t) + k_t v_t^T. "
+                           "Underbrace annotations: Remove the old component along k_t; "
+                           "Write the new k_t -> v_t association.")
         section = section_name(number)
         svg = frame(number, title, svg, source_citations[number-1], count)
         slides.append(
@@ -204,6 +263,9 @@ def build():
         manifest.append({"number": number, "title": title, "section": section})
     css = (ASSETS / "base.css").read_text() + '''
     svg text{font-family:Arial,Helvetica,sans-serif}
+    .gdn-math{color:#172329;padding:4px 0}
+    .gdn-math math{margin:0}
+    .gdn-math mtext{font-family:Arial,Helvetica,sans-serif}
     .slide-transcript{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:pre-wrap;border:0}
     @media print{.slide-transcript{display:none!important}}
     '''
