@@ -76,6 +76,8 @@ def main():
     shutil.copy2(ROOT / "week-3-parallelism-overview.html", OUT / "week-3/overview.html")
     (OUT / "week-5").mkdir(parents=True, exist_ok=True)
     shutil.copy2(ROOT / "week-5-linear-attention.html", OUT / "week-5/slides.html")
+    document("week-6-speaker-notes.md", "Week 6 speaker notes", "week-6/speaker-notes.html", "../")
+    shutil.copy2(ROOT / "week-6-robot-learning.html", OUT / "week-6/slides.html")
     (OUT / ".nojekyll").touch()
     print(f"Built {len(list(OUT.rglob('*.html')))} HTML pages in _site/")
 
