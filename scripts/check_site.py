@@ -70,7 +70,7 @@ def main():
             ("week-3-parallelism-overview.html", "week-3/overview.html", 22),
             ("week-4-serving.html", "week-4/slides.html", 30),
             ("week-5-linear-attention.html", "week-5/slides.html", 49),
-            ("week-6-robot-learning.html", "week-6/slides.html", 60),
+            ("week-6-robot-learning.html", "week-6/slides.html", 52),
             ("week-6-robot-learning-reference.html", "week-6/reference.html", 30)):
         source = (ROOT / source_name).read_bytes()
         assert (OUT / route).read_bytes() == source, f"Slide output differs from source: {route}"
@@ -84,7 +84,7 @@ def main():
     assert (OUT / "week-3/tp-exercise.py").read_bytes() == (ROOT / "week-3-tp-exercise.py").read_bytes(), "Week 3 exercise output differs from source"
     assert (OUT / "week-4/lab/run_benchmark.py").read_bytes() == (ROOT / "week-4-lab/run_benchmark.py").read_bytes()
     assert (OUT / ".nojekyll").exists()
-    print(f"Validated {len(pages)} HTML pages, {checked} local links/anchors, 24 Week 1 slides, 31 Week 2 slides, Week 3 decks of 50 and 22 slides, 30 Week 4 slides, 49 Week 5 slides, 60 Week 6 slides plus the preserved 30-slide reference, exercise downloads, and publication boundaries.")
+    print(f"Validated {len(pages)} HTML pages, {checked} local links/anchors, 24 Week 1 slides, 31 Week 2 slides, Week 3 decks of 50 and 22 slides, 30 Week 4 slides, 49 Week 5 slides, 52 Week 6 slides plus the preserved 30-slide reference, exercise downloads, and publication boundaries.")
 
 
 if __name__ == "__main__":

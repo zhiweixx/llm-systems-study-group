@@ -1,520 +1,460 @@
 # Week 6 — Robot learning: from demonstrations to VLAs and LLM agents
 
-60 slides for researchers familiar with LLMs and statistics who are new to robotics. Slides 1–24 establish control interfaces, recorded data, imitation learning, and temporal feedback. Slides 25–46 connect VLMs, VLAs, continuous action generation, and the π0.5 case study. Slides 47–60 compare LLM robotics interfaces and recent reported evidence, ending with a research question and solution. The original 30-slide presentation is preserved separately as a reference.
+52 slides for researchers familiar with LLMs and statistics who are new to robotics. Slides 1–14 explain robot observations, concrete action arrays, demonstration records, and imitation learning. Slides 15–38 teach VLMs, VLAs, autoregressive and flow-based action generation, and π0.5 training and execution. Slides 39–52 explain Code as Policies, System 1 / System 2 architectures, and general models controlling or supervising robots. The original 30-slide presentation is preserved separately as a reference.
 
 Read alongside MIT Robotic Manipulation, Stanford CS224R (2026) imitation learning, and the primary papers linked on each slide. Teaching diagrams are authored illustrations. Dataset frames and paper plots retain source attribution. Reported results are not new experiments run for this deck; evaluations with different tasks and interfaces are not directly comparable.
 
-Play the embedded ALOHA demonstration and use Previous step / Next step within the teaching examples. Arrow keys navigate slides; Notes opens the explanation and references. The HTML embeds its figures and robot demonstration and works offline. Print / PDF shows the final interactive frame and a static video poster. Recent sources checked 24 October 2026.
+Play the embedded ALOHA demonstration and use Previous step / Next step within the teaching examples. Arrow keys navigate slides; Notes opens the explanation and references. The HTML embeds its figures and robot demonstration and works offline. Print / PDF shows the final interactive frame and a static video poster. Sources checked 25 October 2026.
 
-## 1. From images and language to robot motion
+## 1. From images and language to robot actions
 
 **Section: Opening**
 
-The source illustration is the pick-and-place setup from MIT’s manipulation course. Start with the concrete task of moving an object to a desired pose. The central question is what numerical or executable output actually moves the machine. The lesson first follows sensing, geometry, data, and imitation learning, then adds pretrained vision/language models and LLM-based control interfaces. This figure is a teaching setup, not an experimental result from the ALOHA demonstration used later.
+The goal is to understand the interfaces, not to memorize a list of methods. We will inspect an actual stored episode, decode the robot action, create supervised training pairs, and follow a learned prediction into execution. Later sections connect this interface to visual-language representations, generative action models, code-based control, and hierarchical systems. The cover is a frame from the simulated ALOHA insertion dataset, not a physical-robot rollout or a result from a model introduced in this lesson.
 
-- [MIT · Pick and place](https://manipulation.mit.edu/pick.html)
+- [ALOHA · Metadata](https://huggingface.co/datasets/lerobot/aloha_sim_insertion_human/blob/main/meta/info.json)
+- [CS224R · Imitation](https://cs224r.stanford.edu/slides/02_cs224r_imitation_2026.pdf)
 
-## 2. A robot acts inside a feedback loop
+## 2. The policy commands; the controller tracks
 
-**Section: Foundations**
+**Section: Robot data and actions**
 
-The policy chooses a command, such as a desired joint configuration. A lower-level controller uses measurements to track that command through actuation. The robot and its environment produce new observations. Proprioception means measurements of the robot itself, including joint positions and velocities. A policy may require observation history because measurements reveal only part of the physical state. “Controller” and “policy” overlap in some robotics usage; the separation here is a useful position-command example, not a universal taxonomy. Learned modules, classical planning, and feedback control can coexist in one stack.
+This is the joint-position interface used in our running example. The policy takes observations and selects desired joint/gripper coordinates. A lower-level feedback controller tracks those targets through motor actuation. The robot and environment then produce the next observations. Proprioception is measurement of the robot itself, such as joint position or velocity; it does not include the entire scene. A controller uses measured errors, so the commanded target need not equal the next measured position. Some robotics literature uses policy and controller interchangeably, and some learned policies directly output torques; the distinction here describes this concrete position-control stack. The displayed command begins with actual episode-zero action values rounded for readability.
 
 - [Modern Robotics · Control](https://modernrobotics.northwestern.edu/nu-gm-book-resource/11-1-control-system-overview/)
-- [MIT · Pick and place](https://manipulation.mit.edu/pick.html)
+- [ALOHA · Action interface](https://github.com/tonyzhaozh/act/blob/main/sim_env.py)
+- [Episode 0 · Stored rows](https://datasets-server.huggingface.co/rows?dataset=lerobot%2Faloha_sim_insertion_human&config=default&split=train&offset=0&length=2)
 
-## 3. A task goal becomes a sequence of geometric goals
+## 3. Watch one recorded demonstration
 
-**Section: Foundations**
+**Section: Recorded demonstration**
 
-MIT’s pick-and-place chapter deliberately begins with ideal object-pose measurement to isolate geometry. The four gripper poses show why even a seemingly simple task needs an approach pose, a grasp, transfer, and release. Real perception must estimate object and tool poses from measurements, and contact/friction may remain uncertain. The idealized chapter assumes the object stays fixed in the world while ungrasped and fixed relative to the gripper while held. These are teaching assumptions, not general laws of manipulation. The picture introduces the need for target poses before discussing learned policies.
-
-- [MIT · Pick and place](https://manipulation.mit.edu/pick.html)
-
-## 4. Joint angles and tool pose describe different things
-
-**Section: Foundations**
-
-A configuration q is the set of the robot’s joint coordinates. The tool pose is its position and orientation relative to a reference frame. Forward kinematics computes pose from configuration; inverse kinematics seeks a configuration achieving a target pose. IK may have no solution or multiple solutions, and a valid endpoint does not establish a collision-free trajectory. The planar arm is an authored schematic, not the ALOHA robot. Revolute joint coordinates commonly use radians; prismatic coordinates use length. A tool-position target and a vector of desired joint angles are different action interfaces.
-
-- [MIT · Pick and place](https://manipulation.mit.edu/pick.html)
-
-## 5. A vector needs a coordinate frame
-
-**Section: Foundations**
-
-The MIT figure shows frames attached to bodies. The right-hand illustration is a two-dimensional slice with world and tool axes sharing an origin for clarity; in general origins differ as well. A displacement expressed in one frame changes coordinates through rotation, while a point-position conversion generally includes translation. A numeric target must identify its reference frame, orientation convention, units, and whether it is absolute or relative. Scaling data by a mean and standard deviation is numerical normalization, not geometric frame conversion. Do not infer those conventions from the length of an array.
-
-- [MIT · Pick and place](https://manipulation.mit.edu/pick.html)
-- [Modern Robotics · Transforms](https://modernrobotics.northwestern.edu/nu-gm-book-resource/3-3-1-homogeneous-transformation-matrices/)
-
-## 6. One slow decision can produce many fast commands
-
-**Section: Foundations**
-
-All rates and latencies on this page are invented for teaching. The camera icon marks an image available at the beginning of the first model call. Its result arrives 80 milliseconds later; during that interval the system executes an earlier target or a hold behavior. The result is then played as commands at 50 Hz. The joint servo continues to use rapid sensor feedback, even while model computation is in progress. Servo ticks are one millisecond apart. Actual systems must measure sensor, transport, computation, scheduling, and actuation delays. UMI explicitly aligns captured observations and future execution timestamps. Some simulators pause during inference, which changes the physical-time interpretation.
-
-- [UMI · Data and timing](https://arxiv.org/html/2402.10329)
-- [Modern Robotics · Control](https://modernrobotics.northwestern.edu/nu-gm-book-resource/11-1-control-system-overview/)
-
-## 7. Watch one recorded demonstration
-
-**Section: Robot demonstration**
-
-Play the actual simulated ALOHA insertion episode before interpreting the data. This is episode 0 of lerobot/aloha_sim_insertion_human, not a rollout generated by our lesson or a physical-robot video. The original records are nominally 50 Hz. The embedded offline video samples every fifth source frame, giving ten displayed frames per second and covering nominal episode times 0 through 9.9 seconds. The encoded container lasts about 10.24 seconds; do not infer sensor timestamps from playback time. Ask which observations reveal approach, alignment, grasp, and insertion. The native controls allow pause and replay, while print uses a poster image.
+This is episode 0 of lerobot/aloha_sim_insertion_human, a recorded simulation. The original dataset has a nominal 50-Hz record rate. The local playback samples every fifth source frame, giving ten displayed frames per second and covering nominal times 0 through 9.9 seconds. The encoded container lasts about 10.24 seconds, so playback time is not a sensor timestamp. Pause while the arms approach, grasp, and align. Ask what must be inferred from the image and which robot measurements are also useful. The original task is two-arm peg insertion; this is not evidence that a language model controls this rollout.
 
 - [ALOHA · Metadata](https://huggingface.co/datasets/lerobot/aloha_sim_insertion_human/blob/main/meta/info.json)
 - [Episode 0 · Stored rows](https://datasets-server.huggingface.co/rows?dataset=lerobot%2Faloha_sim_insertion_human&config=default&split=train&offset=0&length=2)
 
-## 8. One frame is more than an image
+## 4. One frame is more than an image
 
-**Section: Robot data**
+**Section: Robot data and actions**
 
-The image is actual episode 0 frame 0. The LeRobot record contains observation.state and action as float32 arrays of length fourteen: six left-arm coordinates, left gripper, six right-arm coordinates, right gripper. RGB storage is height 480 by width 640 by three channels; a loader may return channel-first tensors. Episode 0 has 500 records at nominal 50 Hz. The current task metadata string is “Insert the peg into the socket.” This is a dataset label, not per-frame speech or evidence that original ACT consumes language. A state field here describes measured robot variables, not the entire physical world. LeRobot is storage/access machinery rather than a universal action schema.
+These are the actual dataset fields and shapes. The image shown is episode 0 frame 0. RGB storage uses height 480, width 640, and three channels; a model loader may transpose it to channel-first tensors. Both observation.state and action contain fourteen float32 numbers, but one records measured configuration and the other a desired configuration. The joint and gripper ordering is unpacked on the next page. LeRobot organizes storage, timestamps, and access; it does not make all datasets share the same action meaning.
 
 - [ALOHA · Metadata](https://huggingface.co/datasets/lerobot/aloha_sim_insertion_human/blob/main/meta/info.json)
 - [Episode 0 · Stored rows](https://datasets-server.huggingface.co/rows?dataset=lerobot%2Faloha_sim_insertion_human&config=default&split=train&offset=0&length=2)
-- [LeRobot · Format](https://huggingface.co/docs/lerobot/lerobot-dataset-v3)
+- [ALOHA · Action interface](https://github.com/tonyzhaozh/act/blob/main/sim_env.py)
 
-## 9. The command is not the outcome
+## 5. Decode the complete 14D ALOHA command
 
-**Section: Robot data**
+**Section: Robot data and actions**
 
-These are rounded values from the first two stored rows, not synthetic dynamics. The connected segments only join sampled values; they do not establish the continuous response between samples. The target is an absolute desired revolute-joint coordinate in radians. The converter copies image, qpos, and action at the same index and constructs nominal time as frame index divided by FPS. The original ACT simulation loader starts the target chunk at that index. Therefore call it a stored target at nominal frame time, not a documented human wall-clock command. The grippers use a separate normalized opening convention, nominally zero closed and one open. A command does not guarantee the next measured position.
+The first seven coordinates are the six left-arm revolute-joint targets and the left normalized gripper opening. The next seven repeat that ordering for the right arm. sim_env.py documents these as absolute joint position commands, not joint increments, tool coordinates, or torques. constants.py supplies the named joint order. Revolute joints use radians in the simulation. Gripper normalization is an affine mapping relative to calibration endpoints, and it is not clipped by the shown normalization function: the actual first right-gripper target is approximately −0.03124. Thus do not label every coordinate in the array as radians or promise a strict [0,1] bound. The stored target is associated with nominal frame time, not verified wall-clock time of a human action.
 
 - [Episode 0 · Stored rows](https://datasets-server.huggingface.co/rows?dataset=lerobot%2Faloha_sim_insertion_human&config=default&split=train&offset=0&length=2)
+- [ALOHA · Action interface](https://github.com/tonyzhaozh/act/blob/main/sim_env.py)
+- [ALOHA · Joint order](https://github.com/tonyzhaozh/act/blob/main/constants.py)
+
+## 6. A different robot interface can use a 7D tool command
+
+**Section: Robot data and actions**
+
+This vector is a declared teaching example, not an ALOHA record or a measured DROID sample. The interface is [Δx, Δy, Δz, Δr_x, Δr_y, Δr_z, g]. Translation is in meters in the robot base frame. The three rotation coordinates form an incremental rotation vector expressed in that same frame; its direction is the rotation axis and its norm is the angle in radians. It is not an elementwise addition to Euler angles. Here only the z coordinate is nonzero, so the requested orientation increment is 0.05 radians about base z. The gripper convention is explicitly 1=open, 0=closed. Action dimension depends on the interface: a seven-joint arm with a gripper might instead receive eight joint/gripper targets. Other conventions use velocities, quaternions, absolute poses, or normalized commands.
+
+- [MIT · Pick and place](https://manipulation.mit.edu/pick.html)
+- [UMI · Data and timing](https://arxiv.org/html/2402.10329)
+
+## 7. How does a tool target become motor motion?
+
+**Section: Robot data and actions**
+
+The arithmetic shown is only the translation part of the previous declared interface. Position coordinates are all expressed in the base frame. For the rotation-vector convention, orientation is updated by composing the current rotation with the incremental rotation, on the side specified by the spatial/base-frame convention. We do not fabricate numerical joint targets without a robot model. In this illustrative stack, inverse kinematics searches for joint configurations satisfying the target tool pose, and motion planning considers a feasible path and limits. An endpoint IK solution alone is not a collision-free trajectory. The joint controller then tracks the requested joint targets with measurement feedback. Some robot interfaces combine these steps in Cartesian impedance or velocity control; this page presents one concrete route, not a required universal architecture.
+
+- [MIT · Pick and place](https://manipulation.mit.edu/pick.html)
+- [Modern Robotics · Control](https://modernrobotics.northwestern.edu/nu-gm-book-resource/11-1-control-system-overview/)
+
+## 8. An episode is an aligned sequence of records
+
+**Section: Robot data and actions**
+
+The actual episode contains records 0 through 499. This page shows two real images, frame 0 and frame 100, with omitted intervening records indicated by ellipses. The first-row shoulder values are actual left-shoulder measurements and targets; frame 100 only shows verified field shapes, not invented values. The converter copies source qpos, images, and actions using the same index, then creates nominal timestamps as index/FPS. The simulation training loader begins its action target at that index. This establishes a dataset alignment convention, not a claim about exact hardware capture or command-issue timestamps. The episode lasts 500 command slots at 50 Hz; its final nominal sample is 9.98 seconds. Episode identity must be retained when records are concatenated. The converter marks the final record done; that flag alone is not a task-success label.
+
+- [ALOHA · Metadata](https://huggingface.co/datasets/lerobot/aloha_sim_insertion_human/blob/main/meta/info.json)
+- [Episode 0 · Stored rows](https://datasets-server.huggingface.co/rows?dataset=lerobot%2Faloha_sim_insertion_human&config=default&split=train&offset=0&length=2)
 - [ALOHA · Converter](https://github.com/huggingface/lerobot/blob/3c0a209/lerobot/common/datasets/push_dataset_to_hub/aloha_hdf5_format.py)
-- [ACT · Simulation API](https://github.com/tonyzhaozh/act/blob/main/sim_env.py)
 
-## 10. Turn a trajectory into training pairs
+## 9. Where do the action labels come from?
 
-**Section: Robot data**
+**Section: Robot data and actions**
 
-The green observation at t is paired with the next H stored commands, beginning at t under the verified simulation alignment convention. H=4 is illustrative. The action dimension d_a is independent of H; it is fourteen for the ALOHA example. Input history or optional language can be added when the selected method uses them. Original ACT uses images and joint observations, without language. A different acquisition pipeline may need a different action/observation shift. Split evaluation data by whole episodes and relevant scenes or tasks to avoid neighboring-frame leakage. At episode ends, either drop an incomplete window or pad it with a validity mask; do not silently continue into the next episode. The final-record next.done flag is not itself a success label.
-
-- [ACT · §IV](https://arxiv.org/html/2304.13705v1)
-- [ALOHA · Converter](https://github.com/huggingface/lerobot/blob/3c0a209/lerobot/common/datasets/push_dataset_to_hub/aloha_hdf5_format.py)
-
-## 11. How does a person provide a demonstration?
-
-**Section: Demonstrations**
-
-The ALOHA photograph is a crop of the original ACT setup figure. The person backdrives leader arms; follower arms mirror their joint configuration, and leader positions provide command labels while follower positions provide measurements. The UMI photograph is cropped from its hardware figure and shows a handheld gripper with camera/IMU rather than a leader robot. UMI estimates gripper trajectories and handles latency/alignment when transferring them to a robot. Neither raw human video nor a shared file format automatically supplies executable robot labels. DROID is another collection route, using a common real robot across diverse environments; Open X-Embodiment aggregates many datasets and embodiments. Their action units, frames, absolute/relative conventions, and timing must remain explicit. Original source assets are preserved; only the displayed viewports are cropped.
+ALOHA teleoperation maps human-moved leader-arm joint positions to follower-arm targets and records robot observations alongside those commands. The displayed photograph is a physical ALOHA setup from the ACT paper; it is not a photograph of the simulated episode. UMI records human manipulation through a portable camera-equipped gripper, reconstructs the gripper trajectory with visual-inertial SLAM, and measures gripper width. Its data and deployment interfaces align observations and future actions, and account for timing and coordinate conventions. The two systems do not produce interchangeable arrays without conversion. We use these images to show where supervision comes from; no learner-generated action labels or per-frame language annotations are implied.
 
 - [ACT · §IV](https://arxiv.org/html/2304.13705v1)
 - [UMI · Data and timing](https://arxiv.org/html/2402.10329)
-- [Open X-Embodiment](https://arxiv.org/html/2310.08864v6)
+- [ALOHA · Action interface](https://github.com/tonyzhaozh/act/blob/main/sim_env.py)
 
-## 12. Behavioral cloning is supervised learning of actions
+## 10. Turn an episode into input–target training pairs
 
-**Section: Imitation learning**
+**Section: Robot data and actions**
 
-Behavioral cloning treats demonstrated observation/action pairs as supervised data. The policy can represent a conditional action distribution rather than only a point prediction. Negative log likelihood is a common explicit-density formulation; under a fixed-variance Gaussian assumption it reduces to squared-error regression up to constants and scale. The same idea applies to an action chunk A rather than a single action a. Diffusion and flow-matching policies learn conditional distributions with their respective denoising or vector-field objectives; this equation is not a claim that every policy directly evaluates tractable likelihood. No reward function is needed for this imitation objective. Reinforcement learning will later change the learning signal to cumulative reward.
-
-- [CS224R · Imitation](https://cs224r.stanford.edu/slides/02_cs224r_imitation_2026.pdf)
-
-## 13. Two valid actions can have an invalid average
-
-**Section: Action distributions**
-
-Pause on the first frame and ask for the squared-error optimum. The second frame draws a pointwise mean between two equally weighted geometric command routes. That average intersects the obstacle although each demonstrated route avoids it. This is an authored illustrative command-space example, not a measured robot rollout. It motivates representing more than a conditional mean. It does not establish that all real datasets are strongly multimodal or that multimodality explains every empirical gain of generative policies. Temporal correlation, optimization, robustness, and action representations also matter. A larger deterministic network alone does not change the distribution family.
-
-- [CS224R · Imitation](https://cs224r.stanford.edu/slides/02_cs224r_imitation_2026.pdf)
-- [Diffusion Policy · §2](https://arxiv.org/html/2303.04137v5)
-
-## 14. Learn to turn noise into an action
-
-**Section: Action distributions**
-
-This is the broad generative-policy intuition used by the Stanford lecture: start from a distribution that is easy to sample and learn a conditioned transformation toward demonstrated actions. The drawn curves are illustrative one-dimensional marginals, not the full high-dimensional chunk distribution. The observation is held fixed while generating a candidate action. Different noise samples can lead to different valid candidates. This page intentionally precedes the particular diffusion algorithm. Diffusion and flow matching differ in their training objectives and sampling formulations; neither is merely training a deterministic regression from arbitrary independent noise directly to an arbitrary demonstration.
-
-- [CS224R · Imitation](https://cs224r.stanford.edu/slides/02_cs224r_imitation_2026.pdf)
-- [Diffusion Policy · §2](https://arxiv.org/html/2303.04137v5)
-
-## 15. The learner changes its own input distribution
-
-**Section: Closed-loop learning**
-
-The pale region represents observations or states encountered by demonstrations; this is not a physical tool path or a quantitative density contour. The learned policy can leave that region after an imperfect action. Its next input is therefore sampled from the distribution induced by the learner, which may differ from the expert distribution. Errors can compound. The key contrast with ordinary held-out prediction is that the policy’s outputs affect its future inputs. Do not quote a worst-case horizon-squared bound without its assumptions, or claim that chunking removes distribution shift. Offline action loss is useful, but task completion and recovery require rollouts.
-
-- [DAgger · Algorithm 3.1](https://proceedings.mlr.press/v15/ross11a/ross11a.pdf)
-- [CS224R · Imitation](https://cs224r.stanford.edu/slides/02_cs224r_imitation_2026.pdf)
-
-## 16. Ask the expert about the learner’s mistakes
-
-**Section: Closed-loop learning**
-
-DAgger iterates between running the current policy, querying an expert for actions at the visited states, aggregating those labels with prior data, and retraining. The green correction arrow is an expert action label at a learner-visited state; it is not a guarantee that the current learner already executed the correction. The original algorithm can mix expert and learner control during collection. Human-gated intervention is a related practical variant in which a person takes over and supplies corrective demonstrations. Labeling and takeover are different interfaces. Expert availability and the cost of collecting new trajectories remain part of the method’s assumptions.
-
-- [DAgger · Algorithm 3.1](https://proceedings.mlr.press/v15/ross11a/ross11a.pdf)
-- [CS224R · Imitation](https://cs224r.stanford.edu/slides/02_cs224r_imitation_2026.pdf)
-
-## 17. Predict a sequence of commands in one call
-
-**Section: Action chunking**
-
-H is the number of future commands and d_a is the dimension of one command. The illustrated output has six commands and fourteen coordinates each; those numbers are pedagogical and use the ALOHA action dimension. Green dots mark gripper coordinates to reinforce that coordinates can have different units and meanings. A chunk is a structured command array, not six model conversations and not six predicted physical states. The observation can include one or more cameras, proprioception, and sometimes a history or language instruction. Predicting a chunk does not yet determine how much of it will be executed before observing again.
+The current observation is paired with the next H stored commands, beginning at the same index under this simulation alignment convention. Here H=4 is illustrative, and every action cell is a complete fourteen-dimensional command for both arms. The observation includes the image and measured joint/gripper configuration. Moving t generates more training examples from the same episode. Other tasks may use image history or language as additional inputs. The input does not include the future observations drawn for temporal context. At an episode boundary, either drop incomplete windows or use padding with a validity mask rather than spill into another episode. Evaluation splits should use whole episodes and suitable scene/task separation to avoid near-duplicate neighboring frames leaking across splits.
 
 - [ACT · §IV](https://arxiv.org/html/2304.13705v1)
-- [Diffusion Policy · §2](https://arxiv.org/html/2303.04137v5)
-
-## 18. Execute a prefix, then update the plan
-
-**Section: Action chunking**
-
-The first frame predicts six commands. The second executes only two, which turn green. A new observation at step two supports a fresh chunk; unused predictions from the first chunk are crossed out. At step four the process repeats. Subscripts identify execution steps and parenthesized superscripts identify prediction/observation steps, so two proposals for the same execution step can have different values. The drawing is logical timing and omits inference latency. H is the prediction horizon and h the executed prefix, with h at most H. This receding-horizon pattern is used in Diffusion Policy. Larger h can reduce model calls but delay visual correction. Rapid joint feedback may remain active inside the prefix.
-
-- [Diffusion Policy · §2](https://arxiv.org/html/2303.04137v5)
-
-## 19. Overlapping chunks can be combined
-
-**Section: Action chunking**
-
-This is ACT’s temporal-ensembling idea, distinct from simply executing a prefix and discarding the remainder. Querying at successive observation steps creates overlapping chunks. At execution step two, the highlighted column contains predictions made from observations zero, one, and two. ACT combines predictions aligned to that same execution time using a weighted average. It does not average adjacent execution times as an ordinary temporal smoothing filter would. This adds inference-time computation and controls how quickly new observations influence the command. The schematic uses short chunks for readability, not the original reported horizon. It makes no claim that model inference is instantaneous.
-
-- [ACT · §IV](https://arxiv.org/html/2304.13705v1)
-
-## 20. ACT: Action Chunking with Transformers
-
-**Section: Action policies**
-
-Original Action Chunking with Transformers learns from ALOHA demonstrations. In the real system its observation includes four RGB camera views and fourteen follower joint/gripper measurements. The output is a chunk of desired joint positions. ACT trains a conditional VAE: an encoder sees demonstrated actions and joint observations to infer a latent style variable, while the transformer decoder predicts the action sequence. Reconstruction and KL terms train the model. At inference the encoder is removed and z is set to the prior mean, zero. The displayed architecture is a simplified inference path; it deliberately does not draw the full training encoder. Original ACT has no language input. The simulated example earlier can use fewer camera views, so do not infer its schema from this real-system architecture.
-
-- [ACT · §IV](https://arxiv.org/html/2304.13705v1)
-
-## 21. Diffusion Policy generates an action chunk
-
-**Section: Action policies**
-
-Diffusion Policy models a conditional distribution of action sequences given recent observations. Observations are conditioning inputs, not part of a jointly generated future image/state sequence. After predicting a horizon, the system executes a prefix and replans from new observations. The horizon sizes in this diagram are illustrative. The method can use visual observations or suitable low-dimensional observations, and its action coordinates depend on the robot interface. It need not contain an explicit world model. The next page opens the repeated denoising computation inside the circle.
-
-- [Diffusion Policy · §2](https://arxiv.org/html/2303.04137v5)
-
-## 22. Refine a candidate command sequence
-
-**Section: Action generation**
-
-Each panel shows one coordinate across a future action chunk, not the whole H-by-d_a array. The panels are successive generative refinements conditioned on the same observation. Their horizontal axes are future command offsets; moving from panel to panel is a model-computation iteration, not the robot advancing through those commands. The plotted values are authored illustrations, not samples from a trained policy. During diffusion training, demonstrated chunks are corrupted at sampled noise levels and a conditioned network learns to predict the added noise. During sampling, a schedule of learned denoising updates transforms noise toward an action sequence. Exact samplers may include stochastic terms and differ in parameterization. Flow matching, introduced later, uses a related but distinct vector-field objective.
-
-- [Diffusion Policy · §2](https://arxiv.org/html/2303.04137v5)
+- [ALOHA · Converter](https://github.com/huggingface/lerobot/blob/3c0a209/lerobot/common/datasets/push_dataset_to_hub/aloha_hdf5_format.py)
 - [CS224R · Imitation](https://cs224r.stanford.edu/slides/02_cs224r_imitation_2026.pdf)
 
-## 23. A generated target still needs feedback control
+## 11. Action dimension and chunk length are different axes
 
-**Section: Execution**
+**Section: Robot data and actions**
 
-The diagram isolates a joint-position servo: compare a desired configuration q* with the measured q, use the error in a control law, and apply motor effort. The minus sign represents subtracting measured position from desired position; real controllers can also use velocity, integral terms, feedforward dynamics, torque limits, and other signals. We do not claim every robot has the same PID implementation. This lower-level feedback can remain active while a learned policy executes an open-loop visual prefix or computes its next chunk. Physical motion depends on both control and dynamics, including contact and disturbance, so generated command arrays are not guaranteed outcomes. A tool-pose command may additionally require IK or another Cartesian controller.
+A single action is a vector with d coordinates; an action chunk is an H-by-d matrix. With this robot interface, d=14. Choosing H=50 gives 700 scalar outputs, not a robot with 700 joints or degrees of freedom. At 50-Hz execution, fifty slots cover one second of playback; their nominal start times span 0 through 0.98 seconds relative to the first slot. This H is a teaching example and should not be read as a universal hyperparameter for ACT, diffusion policies, or any other method. Predicting a chunk does not require committing to all its rows, which motivates the prefix-execution example next.
 
-- [Modern Robotics · Control](https://modernrobotics.northwestern.edu/nu-gm-book-resource/11-1-control-system-overview/)
+- [ACT · §IV](https://arxiv.org/html/2304.13705v1)
+- [ALOHA · Metadata](https://huggingface.co/datasets/lerobot/aloha_sim_insertion_human/blob/main/meta/info.json)
+
+## 12. Behavior cloning learns the recorded input–action mapping
+
+**Section: Robot data and actions**
+
+Behavior cloning uses demonstrations as supervised training data. The input is the observation at the start of a window; the target is the demonstrated action or action chunk. A simple regression policy could minimize an L1 or squared error between predicted and target actions; a probabilistic or generative policy uses an objective appropriate to its output model. Numerical normalization is usually performed per action coordinate and undone before execution. The essential point is the training/deployment distinction: the recorded target is available to compute training loss, but it is not an input the deployed model can consult. The trained weights produce commands from fresh observations, and the controller executes them. Original ACT does not take a language instruction; adding language later is an extension of this input interface.
+
+- [CS224R · Imitation](https://cs224r.stanford.edu/slides/02_cs224r_imitation_2026.pdf)
 - [ACT · §IV](https://arxiv.org/html/2304.13705v1)
 
-## 24. What would you need to execute this array?
+## 13. Execute a short prefix, then predict again
 
-**Section: Transition to VLAs**
+**Section: Robot data and actions**
 
-Use this as a short audience check before adding vision-language models. An array dimension is insufficient. Ask for coordinate meanings and ordering, units, reference frame, absolute versus relative convention, gripper semantics, intended execution times, limits, and the controller or skill executor consuming it. The numbers are invented and do not correspond to an actual robot command. A VLA can learn the mapping into this interface, while an LLM might instead select a skill or produce an executable program. None of those labels eliminate the need to define sensing, feedback, and the action contract. The lesson now turns to what pretrained visual and language representations add.
+This interaction is a toy receding-horizon schedule using the verified fourteen-dimensional robot interface. The model predicts H=6 commands, then the runtime executes h=2 commands at 50 Hz, covering forty milliseconds of playback. Every cell is an entire fourteen-dimensional target, not a single scalar or a model token. Rows distinguish predictions made from different observations; columns share the same robot execution index. Crossed-out gray cells are old predictions that are discarded and replaced by a new row. Green means executed. A controller can still use rapid feedback while following each target. The diagram omits inference and communication latency; real deployments must schedule targets with those delays in mind. H and h here are pedagogical choices, not the original ACT execution algorithm or its temporal-ensembling rule.
 
-- [MIT · Pick and place](https://manipulation.mit.edu/pick.html)
+- [ACT · §IV](https://arxiv.org/html/2304.13705v1)
+- [UMI · Data and timing](https://arxiv.org/html/2402.10329)
+
+## 14. Add language while keeping an executable action interface
+
+**Section: Bridge to vision and language**
+
+The next section adds language and pretrained visual representations to the interface we have established. The instruction on this page is the dataset task metadata string. It is not a per-frame spoken annotation, and it was not an input to the original ACT policy. This diagram illustrates a language-conditioned extension: images, robot measurements, and a task instruction condition a policy whose output still must be decoded into the declared robot commands. A familiar visual-language model may produce textual descriptions or answers; producing useful physical actions requires an action interface and suitable training or control machinery. Later pages distinguish direct vision-language-action policies from systems that generate code or call existing skills.
+
+- [ALOHA · Metadata](https://huggingface.co/datasets/lerobot/aloha_sim_insertion_human/blob/main/meta/info.json)
+- [ACT · §IV](https://arxiv.org/html/2304.13705v1)
 - [CS224R · Imitation](https://cs224r.stanford.edu/slides/02_cs224r_imitation_2026.pdf)
 
-## 25. What does a vision–language model predict?
+## 15. A VLM turns an image and a question into an answer
 
-**Section: Visual language to action**
+**Section: Learning from images and language**
 
-A VLM accepts visual inputs and text prompts and produces predictions such as a description, an answer, or serialized boxes. The prompt shown here is an authored illustration, not a model run or a measured result. The photograph is a mock kitchen evaluation environment from π0.5 Figure 6. This page establishes the interface before showing the encoder and Transformer. PaliGemma is a representative generative VLM; it is not the only architecture called a VLM. Calibrated robot commands require an additional action representation and robot experience.
+Start with the interface, not the model taxonomy. The photograph is the mock blue kitchen from original π0.5 Figure 6. The question and answer are authored teaching examples grounded in the visible cabinet color; no VLM was run for this slide. I denotes the image, Q the question, and y the answer tokens on later pages. PaliGemma is one representative generative VLM. Image-text training can also supervise captions or serialized boxes. The next slide opens the box.
 
 - [PaliGemma §3](https://arxiv.org/html/2407.07726v1#S3)
 - [π0.5 paper](https://www.physicalintelligence.company/download/pi05.pdf)
 
-## 26. Images become input tokens
+## 16. Image patches become vectors the language model can read
 
-**Section: Visual language to action**
+**Section: Learning from images and language**
 
-This is an editable architectural illustration, not a model-generated example. PaliGemma combines the SigLIP ViT-So400m vision encoder, a linear projection, and Gemma-2B. The projection aligns feature dimensions, rather than converting image patches into vocabulary IDs. Its image and prompt prefix uses bidirectional attention, while the generated answer suffix uses autoregressive attention. The model can emit natural language and serialized structured outputs such as boxes. Its base pretraining is not chat instruction tuning. Recognition and semantic representations do not by themselves specify a robot action coordinate system, scale, or execution controller. OpenVLA uses a different VLM backbone: Prismatic, with DINOv2 and SigLIP features plus Llama 2. The schematic introduces the reusable three-part VLM structure, not a claim that every VLA uses PaliGemma. Source: PaliGemma §3.1 and Figures 1–2.
+PaliGemma §3.1 and Figure 2: a SigLIP vision encoder produces a sequence of image features; a linear projection maps them to the Gemma embedding dimension. The decoder receives projected image vectors and text embeddings in one prefix. These visual vectors are continuous embeddings, not discrete words or quantized action IDs. Image and question tokens use full prefix attention; generated answer tokens use causal attention. At 224-pixel resolution PaliGemma has 256 visual tokens, but the diagram shows only three representative slots. The drawing is conceptual; it does not imply only three patches exist.
 
 - [PaliGemma §3](https://arxiv.org/html/2407.07726v1#S3)
 
-## 27. A numerical action can become a token
+## 17. VLM training predicts the answer, with the prompt loss masked
 
-**Section: Discrete action policies**
+**Section: Learning from images and language**
 
-The top row is a deliberately authored quantization example, not an observed OpenVLA training value. Mapping +0.0200 m from [−0.10,+0.10] to [−1,1] gives +0.20. With 256 uniform bins, floor(256×0.60)=153, and decoding to that bin center gives approximately +0.01992 m. A token index is not a physical displacement. Original OpenVLA fine-tunes Prismatic-7B on 970k demonstrations, predicts one 7D end-effector/gripper action from one image and an instruction, and computes next-token cross-entropy on action tokens only. It uses 256 bins per coordinate between the training dataset’s first and 99th percentiles and repurposes 256 vocabulary entries. It does not have the chunking, proprioceptive input, or multiple-camera features of later derivatives. RT-2 co-fine-tunes on robot data and web vision-language tasks, uses an eight-value encoding including termination, and constrains output vocabulary for action prompts. Both generate discrete action codes autoregressively. A robot-specific decoder and controller still execute the resulting numeric command. Sources: OpenVLA §§3.1–3.3 and RT-2 §§3.2–3.3. The tick marks shown are a sparse schematic of the quantization interval, not all 256 bin boundaries. The dataset defines frame, units, bounds and gripper conventions. This slide isolates conversion of one coordinate before learning and deployment.
+This is an illustrative supervised record, not a claim that this photograph is in PaliGemma training. The objective sums negative log probabilities only over target answer positions, conditioned on image I, question Q, and preceding target tokens. Teacher forcing makes all target positions available in parallel during training while causal attention prevents looking at future answer tokens. Token labels are readable word-level stand-ins for subword tokens. EOS is end-of-sequence. PaliGemma §3.1 and §5.2 explain prefix attention and suffix-only supervision. A loss mask differs from an attention mask: the prefix contributes context even though it is not the prediction target.
 
-- [OpenVLA §3](https://arxiv.org/html/2406.09246v3#S3)
-- [RT-2 §3](https://robotics-transformer2.github.io/assets/rt2.pdf)
+- [PaliGemma §3](https://arxiv.org/html/2407.07726v1#S3)
 
-## 28. Train the VLM on demonstrated action tokens
+## 18. A sentence answers the question; it does not move the robot
 
-**Section: Discrete action policies**
+**Section: Learning from images and language**
 
-This equation is next-token cross-entropy on an action-token sequence z. I is the image and ℓ is the instruction; previous action-coordinate tokens condition later tokens within the same command. Original OpenVLA evaluates its cross-entropy loss on action tokens only and fine-tunes a Prismatic-7B VLM. The diagram’s token values are illustrative rather than an actual robot record; g denotes the gripper coordinate’s token. RT-2 additionally co-fine-tunes on original web vision-language examples. It constrains decoding to action tokens when prompted for actions, while retaining language outputs for language tasks. Do not attribute RT-2’s precise data mixture to OpenVLA or imply that original OpenVLA has chunking or proprioceptive input.
+At inference the answer suffix is not supplied: the VLM generates it autoregressively from the image, question, and its own earlier outputs. A semantic answer alone does not specify a robot command in the action interface defined in the preceding chapter. An application could translate language through separately engineered tools or skills; a VLA instead learns an action output from robot demonstrations. This page establishes the missing target supervision before introducing VLA architecture.
 
-- [OpenVLA §3](https://arxiv.org/html/2406.09246v3#S3)
-- [RT-2 §3](https://robotics-transformer2.github.io/assets/rt2.pdf)
-
-## 29. Deploy a vision–language–action (VLA) model
-
-**Section: Discrete action policies**
-
-The top row is a deliberately authored quantization example, not an observed OpenVLA training value. Mapping +0.0200 m from [−0.10,+0.10] to [−1,1] gives +0.20. With 256 uniform bins, floor(256×0.60)=153, and decoding to that bin center gives approximately +0.01992 m. A token index is not a physical displacement. Original OpenVLA fine-tunes Prismatic-7B on 970k demonstrations, predicts one 7D end-effector/gripper action from one image and an instruction, and computes next-token cross-entropy on action tokens only. It uses 256 bins per coordinate between the training dataset’s first and 99th percentiles and repurposes 256 vocabulary entries. It does not have the chunking, proprioceptive input, or multiple-camera features of later derivatives. RT-2 co-fine-tunes on robot data and web vision-language tasks, uses an eight-value encoding including termination, and constrains output vocabulary for action prompts. Both generate discrete action codes autoregressively. A robot-specific decoder and controller still execute the resulting numeric command. Sources: OpenVLA §§3.1–3.3 and RT-2 §§3.2–3.3.
-
+- [PaliGemma §3](https://arxiv.org/html/2407.07726v1#S3)
 - [OpenVLA §3](https://arxiv.org/html/2406.09246v3#S3)
 
-## 30. Web knowledge can select a familiar motor skill
+## 19. A VLA predicts an action in a defined robot interface
 
-**Section: Visual language to action**
+**Section: Learning robot actions**
 
-This photograph is cropped from RT-2 Figure 2, which shows semantic generalization examples. The task uses a familiar physical manipulation skill with a target indicated through a semantic concept. The research distinction is between richer interpretation/selection and arbitrary new physical competence. RT-2 explicitly limits its motor skill distribution to robot experience even when web knowledge changes which object or destination it chooses. These particular illustrative demonstrations are not a common leaderboard against OpenVLA or later policies. RT-1 is a useful predecessor that scaled language-conditioned robot imitation; it was not a conversational VLM fine-tuned into a robot. Source: RT-2 Figure 2, §§3–5.
+The seven coordinates are [Δx, Δy, Δz, Δr_x, Δr_y, Δr_z, g]. Translation is expressed in the robot base frame in meters. The three rotation coordinates form an incremental rotation vector in radians, not additive Euler angles. The toy convention is g=1 open and g=0 closed. The example is [0.02,0,−0.01,0,0,0.05,1]; it illustrates an action interface and is not an inferred, calibrated, or demonstrated command for the pictured kitchen. The photograph shows a richer mobile platform; the seven-coordinate interface is an instructional single-arm example. Original OpenVLA predicts a seven-dimensional end-effector/gripper action; exact dataset rotation and gripper conventions must be respected rather than presumed universal.
 
-- [RT-2 §3](https://robotics-transformer2.github.io/assets/rt2.pdf)
-- [RT-1 §5](https://robotics-transformer1.github.io/assets/rt1.pdf)
+- [OpenVLA §3](https://arxiv.org/html/2406.09246v3#S3)
+- [π0.5 paper](https://www.physicalintelligence.company/download/pi05.pdf)
 
-## 31. π0 adds a continuous action expert
+## 20. Train the VLM to predict the demonstrated action tokens
 
-**Section: Continuous action policies**
+**Section: Learning robot actions**
 
-π0 initializes its visual-language weights from PaliGemma and adds a randomly initialized 300M-parameter action expert, giving roughly 3.3B parameters in total. The robot configuration q_t and action slots use robotics-specific expert weights. Image and text slots use the VLM weights, and attention provides the conditioning connections. This is a simplified computational diagram, not a separate large-language planner calling a black-box motion module. In the original π0, q_t is projected continuously. The original π0.5 changes proprioception to discretized text input, which will be distinguished later. The flow model predicts a vector field on an H=50 action chunk; ten Euler steps generate a chunk in the reported experiments. These ten iterations are generation computation, not ten physical servo cycles. During inference, prefix attention keys/values can be cached while the suffix is updated. Prefix representations are fixed within this sampling call, not permanently frozen model weights. π0 trains on diverse robot demonstrations and then uses curated downstream post-training; some long tasks use an additional high-level VLM. Sources: π0 v4 §IV, Figure 3, Appendices B/D, and CS224R lecture 17 p.6.
+OpenVLA §3.2 represents each action coordinate by one discrete token and applies next-token cross-entropy only to action-token positions. Here z_j denotes the token associated with coordinate j and ℓ is the instruction. The seven z labels stand for codebook entries; they are not literal strings of an actual tokenizer. The displayed numeric values are the same illustrative command as the previous page, rounded to readable precision. During dataset preparation a known demonstration action is encoded into target tokens. A dataset-specific decoder later maps these tokens to approximate coordinate values and restores units. The schematic does not pretend arbitrary numbers have universal token IDs. Original OpenVLA uses 256 bins per coordinate over the 1st–99th percentile interval, but the number-line construction is not needed to understand the learning objective.
+
+- [OpenVLA §3](https://arxiv.org/html/2406.09246v3#S3)
+
+## 21. Decode the tokens, execute the command, then observe again
+
+**Section: Learning robot actions**
+
+This closes the supervised-learning interface around a physical robot. The model predicts tokens without receiving the demonstration action. Decoding restores the action representation, normalization, and units expected by the robot controller. Execution changes the scene, so the policy must be called with new observations. Original OpenVLA predicts one action per call; later pages deliberately move from that single-step example to chunk generation. The controller and action adapter are essential parts of deployment, even when the policy is trained end to end.
+
+- [OpenVLA §3](https://arxiv.org/html/2406.09246v3#S3)
+
+## 22. VLM and VLA training differ in their target records
+
+**Section: Learning robot actions**
+
+The two rows are deliberately authored examples over the same scene. Web image-text data can supply visual and semantic supervision. Robot demonstrations supply actions synchronized with observations and task instructions. A pretrained VLM transfers useful representations, but those representations do not replace the need for suitable action labels and an action interface. This table describes a distinction in record types rather than an exclusive partition: systems such as RT-2 and π0.5 co-train on both robot and non-robot records. Original OpenVLA trains the robot stage on demonstrations with an action-only loss.
+
+- [PaliGemma §3](https://arxiv.org/html/2407.07726v1#S3)
+- [OpenVLA §3](https://arxiv.org/html/2406.09246v3#S3)
+- [π0.5 paper](https://www.physicalintelligence.company/download/pi05.pdf)
+
+## 23. An action chunk is a matrix of future commands
+
+**Section: Generating an action chunk**
+
+This three-by-seven matrix is a toy continuation of the single-command example, not a measured rollout. H is the number of future commands and d_a the action dimension. The storage convention throughout this chapter is H rows by d_a columns. The controller may execute only a prefix before the policy replans from new observations. A chunk describes physical command time; it does not specify how the neural network generates the matrix. That distinction motivates the next slide. Real π0/π0.5 chunks contain 50 commands; the original paper sometimes uses an inclusive time index with H=49, while this teaching deck consistently uses H to count commands.
 
 - [π0 v4 §IV](https://arxiv.org/html/2410.24164v4#S4)
-- [CS224R, lecture 17](https://cs224r.stanford.edu/slides/17_cs224r_rl_vlas_2026.pdf)
+- [π0.5 paper](https://www.physicalintelligence.company/download/pi05.pdf)
 
-## 32. One sample is a whole action chunk
+## 24. A Transformer can generate actions autoregressively or by flow
 
-**Section: Continuous action policies**
+**Section: Generating an action chunk**
 
-The matrix schematically shows action-coordinate rows and physical-time columns. A_t is mathematically stored as H×d_a in this deck; the display transposes it for a horizontal time axis. Entries are intentionally blank, rather than fabricated robot measurements. Each column corresponds to one physical command. π0 uses H=50 and bidirectional attention across continuous action slots. Every flow-generation iteration updates the entire chunk; the action slots are not generated as 50 independent language-model conversations. Prediction horizon, executed prefix, physical control rate and the number of flow iterations are distinct. The next three slides explain generation time τ separately.
+Architecture, output representation, generation objective, and action chunking are distinct design choices. An autoregressive decoder predicts discrete action tokens with a causal output mask. A flow model can also use Transformer layers; π0’s continuous action block uses bidirectional attention among the action slots and predicts a vector field. In this diagram the box denotes an architectural family, not a claim that the two choices have identical weights or masks. Context can include robot state for models that use it. Chunking works with either route. Both can model multiple valid action choices, unlike a single deterministic mean-action predictor under squared error.
 
 - [π0 v4 §IV](https://arxiv.org/html/2410.24164v4#S4)
+- [FAST §§V–VI](https://arxiv.org/html/2501.09747v1#S5)
 
-## 33. Construct a flow-matching training example
+## 25. Autoregressive chunk generation reuses next-token prediction
 
-**Section: Flow matching**
+**Section: Generating an action chunk**
 
-The line is a two-dimensional schematic of a path in the much higher-dimensional action-chunk space. Sample a demonstrated chunk A and an independent Gaussian ε with the same shape, then draw τ according to the training schedule. Interpolate X_τ=(1−τ)ε+τA. The derivative of this particular linear path is A−ε, which is known during training. We can therefore supervise a local velocity without simulating a robot or unrolling a generated trajectory. This is the noise-to-action convention in corrected π0 v4. The drawing’s position τ≈0.42 is illustrative. Its geometry is not an end-effector path in the room. CS224R lecture 2 pp.12–14 motivates the same construction.
+c denotes the fixed conditioning context: current observation and instruction, plus state when used by the model. An action tokenizer encodes the full demonstrated matrix A into m tokens. During inference the model predicts tokens in sequence and then decodes them to the chunk. During teacher-forced training, causal masking still permits all target positions to be evaluated in parallel. The 700-token count is an illustrative 50×14 scalar-binning scheme, not a required length for every autoregressive VLA. FAST exists precisely because encoding every adjacent scalar separately can create long, highly redundant sequences. This comparison concerns serial dependencies, not an inference-time speed ratio.
+
+- [FAST §§V–VI](https://arxiv.org/html/2501.09747v1#S5)
+- [OpenVLA §3](https://arxiv.org/html/2406.09246v3#S3)
+
+## 26. FAST compresses temporal redundancy before token prediction
+
+**Section: Generating an action chunk**
+
+FAST §V and Figure 4 apply a discrete cosine transform independently along time for each normalized action coordinate, scale and round the coefficients, flatten them in frequency-first order, and use byte-pair encoding to pack frequent coefficient patterns. The transform itself is a change of basis; quantization introduces reconstruction error, while BPE compresses the quantized symbols losslessly. The schematic does not claim that this specific 3×2 matrix always becomes two tokens. Token count varies with the chunk, precision setting, and tokenizer. The VLA learns to predict the resulting tokens, and inverse decoding reconstructs an approximate action matrix. FAST §VI evaluates viable autoregressive policies; compressed token prediction is not intrinsically incapable of dexterous behavior.
+
+- [FAST §§V–VI](https://arxiv.org/html/2501.09747v1#S5)
+
+## 27. A noisy chunk is just a numeric mixture of a chunk and noise
+
+**Section: Learning a continuous chunk generator**
+
+All matrices are explicit toy values in normalized action space, with rows indexing future physical commands and columns indexing two displayed coordinates. Noise ε has the same shape as A; real training samples its entries from a standard Gaussian. The shown noise values are illustrative. For τ=0.5, Xτ=(A+ε)/2 gives exactly the displayed matrix. τ is generation time from zero to one; it is not physical robot time. No robot should execute Xτ during the generative procedure. A is available because this is construction of a training example. This removes the need to understand denoising terminology before seeing the arithmetic.
 
 - [π0 v4 §IV](https://arxiv.org/html/2410.24164v4#S4)
 - [CS224R, lecture 2](https://cs224r.stanford.edu/slides/02_cs224r_imitation_2026.pdf)
 
-## 34. Fit the vector field, not a single mean action
+## 28. Flow training supervises a direction at the noisy input
 
-**Section: Flow matching**
+**Section: Learning a continuous chunk generator**
 
-A is a demonstrated H×d_a action chunk and ε is an independent Gaussian tensor of the same shape. Sample τ from the training schedule, interpolate X_τ=(1−τ)ε+τA, and regress the network’s vector field against A−ε. The expectation is over demonstrated context/chunk pairs, independent noise, and generation time. Under squared error, the optimal field at a noisy point is the conditional mean of these local velocity targets; integrating this field transforms an entire noise distribution into an action distribution. This does not require the output action distribution to be Gaussian or to equal a single conditional mean action. Training can sample one τ per example rather than unrolling the full inference trajectory. At inference no demonstrated A is available: sample X_0 and repeatedly apply the learned field with observation/instruction fixed during the call. π0 v4 uses ten Euler steps and a training τ distribution emphasizing noisier times. The equations consistently use noise-to-action orientation. Older π0/π0.5 texts contain an inconsistent target sign, so the teaching equations follow the corrected π0 v4 §IV. The field has units of normalized action per unit generative time, not necessarily physical end-effector velocity. CS224R lecture 2 pp.11–14 gives the corresponding teaching derivation. The statistical distinction is important: squared-error regression here estimates the conditional mean of local velocity targets at X_τ, τ, and context. It is not direct regression from the observation to one mean action. The expectation averages over data pairs, independent Gaussian noise and generation time. Expressiveness of the resulting sampled action law follows from transforming a noise distribution. It does not imply generative methods always beat robust direct regression in every task or dataset.
-
-- [π0 v4 §IV](https://arxiv.org/html/2410.24164v4#S4)
-- [CS224R, lecture 2](https://cs224r.stanford.edu/slides/02_cs224r_imitation_2026.pdf)
-
-## 35. Follow samples through the flow
-
-**Section: Flow matching**
-
-Use Next step to advance generation time while retaining the same initial noise samples. This is an analytic demonstration, not a trained model, robot trajectory, empirical benchmark, or visualization of π0 hidden states. Conditional on a fixed observation, let the data action A equal −2 or +2 with equal probability and ε~N(0,1). The interpolating law is an equal mixture of Gaussians with means ±2τ and standard deviation 1−τ. Its conditional flow is v(x,τ)=[2 tanh(2τx/(1−τ)^2)−x]/(1−τ). This follows from E[A|X_τ=x] and ε=(x−τA)/(1−τ). We integrate this known field using Euler δ=0.01 to τ=0.99. The paths illustrate how initial Gaussian variation separates into two modes. The action coordinate uses arbitrary units; horizontal τ is generation time and does not represent robot execution time. A learned policy approximates a conditional field from demonstrations, and a real action chunk has many coordinates. π0’s reported sampler uses ten Euler steps; the finer analytic demonstration is chosen for a clear teaching picture. The discrete endpoint law makes the field singular exactly at τ=1, so the display stops at 0.99. The control is a discrete step-through, not live numerical inference.
+For the straight interpolation path Xτ=(1−τ)ε+τA, its derivative is A−ε. Subtracting the matrices on the previous page gives the exact target displayed here. The action expert predicts a vector of the same shape as the chunk. The squared loss compares predicted and known directions, averaged over demonstrations, noise, and sampled τ. No generated rollout or environment reward is needed to construct this supervised target. Statistically, the optimal regressor is the conditional expectation of velocity given noisy input and context, not a direct conditional mean of final actions. We use the noise-to-action sign in corrected π0 v4. The original π0.5 text has an inconsistent sign convention; this teaching derivation is internally consistent.
 
 - [π0 v4 §IV](https://arxiv.org/html/2410.24164v4#S4)
 - [CS224R, lecture 2](https://cs224r.stanford.edu/slides/02_cs224r_imitation_2026.pdf)
 
-## 36. A household task extends beyond one grasp
+## 29. Flow inference starts from noise and repeatedly updates the chunk
 
-**Section: π0.5: heterogeneous supervision**
+**Section: Learning a continuous chunk generator**
 
-The photograph strip is π0.5 Figure 2, cropped to the photographs while retaining their order. It shows a robot cleaning a previously unseen kitchen. The brief labels paraphrase tasks shown in the original caption. The research challenge combines object recognition, selecting useful subtasks, and executing motor behavior under changed geometry. This is demonstration evidence, not a measurement that every task succeeds in every home. The task-progress plot is presented separately after the training recipe. The official explanation distinguishes transferring learned skills to new settings from learning arbitrary new physical skills without relevant robot experience. Sources: original π0.5 Introduction, §V, Figure 2, and official project explanation.
+Only the current context, sampled initial noise, and learned vector field are available at deployment. The network is not given A or A−ε. Starting at τ=0, a numerical integrator repeatedly evaluates the field and updates the entire action matrix until τ reaches one. π0 v4 §IV reports forward Euler with δ=0.1 for ten steps and caches the observation-prefix attention keys and values. Different samplers and step counts are possible. Intermediate matrices are internal generation states; the final matrix is decoded to the physical action convention and sent to the controller. This diagram is a computation graph, not a new trained policy or robot experiment.
 
-- [π0.5 paper](https://www.physicalintelligence.company/download/pi05.pdf)
-- [π0.5 explanation](https://www.pi.website/blog/pi05)
+- [π0 v4 §IV](https://arxiv.org/html/2410.24164v4#S4)
 
-## 37. Robot data broaden the physical experience
+## 30. Generation time and robot time are different axes
 
-**Section: π0.5: heterogeneous supervision**
+**Section: Learning a continuous chunk generator**
 
-These are cropped examples from π0.5 Figure 4, not a newly collected dataset. MM supplies mobile household demonstrations, around 400 hours in about 100 home environments. ME supplies demonstrations from non-mobile robots in diverse homes; these robots are easier to transport but differ from the target mobile platforms. Laboratory cross-embodiment data include single/dual arms and static/mobile robots, with public Open X-Embodiment data as an additional component. The pictured lab examples are only part of this category. Action targets require each dataset’s control-mode, units, normalization and embodiment conventions. These physical sources complement semantic supervision rather than duplicating it. The full numeric mixing ratios are not disclosed; 97.6% of first-phase examples come from sources other than the target mobile household subset. Source: π0.5 §IV-C and Figure 4.
+Each row represents one full action chunk at a different generation-time value τ. Each column is a future robot command time. Advancing τ changes every entry of the candidate chunk; it does not move the robot through those candidate values. Once generation finishes, the controller executes commands along the physical-time axis, usually only a prefix before observing and replanning. The τ=0.5 row is schematic and does not claim that inference follows the straight path to a particular known demonstration. This distinction applies to iterative diffusion and flow chunk generators.
 
-- [π0.5 paper](https://www.physicalintelligence.company/download/pi05.pdf)
-
-## 38. Semantic data teach what to do next
-
-**Section: π0.5: heterogeneous supervision**
-
-The three images are crops from π0.5 Figure 4. The bedroom illustrates high-level supervision: manual subtask labels and relevant bounding boxes accompany robot observations. The pie illustrates a web visual-question-answering example; the broader web mixture also includes captioning and localization. The human beside the robot illustrates verbal instruction demonstrations collected after a low-level policy exists. An expert chooses useful next subtask commands during execution, yielding labels for high-level decisions. These are not newly inferred joint commands extracted from speech alone. VI enters post-training; high-level labels and web examples participate in both phases. The short input/output annotations paraphrase the data roles rather than claiming the displayed images constitute newly run model tests. Source: π0.5 §§IV-C/D and Figure 4.
-
-- [π0.5 paper](https://www.physicalintelligence.company/download/pi05.pdf)
-
-## 39. π0.5 first learns with discrete tokens
-
-**Section: π0.5: training**
-
-This diagram follows the original 19-page π0.5 paper rather than treating current OpenPI code as an exact reproduction. First, pretrain for 280k gradient steps with next-token prediction over text, boxes, and compressed FAST action tokens. This phase uses mobile manipulation, multi-environment non-mobile data, laboratory cross-embodiment data including OXE, high-level labels, and web data. Second, add a randomly initialized action expert and train another 80k steps with joint cross-entropy and flow matching, using flow-loss coefficient 10.0. Post-training action data use MM/ME successful episodes filtered by a length threshold. It retains web and relevant high-level data, adds verbal instruction examples, and omits laboratory cross-embodiment data. FAST discrete action outputs and flow action outputs are masked from attending to one another. FAST compresses a chunk; it is not identical to OpenVLA’s independent 256-bin coordinates. Original π0.5 discretizes proprioceptive state into text input, unlike π0’s continuous state projection. At inference, the system uses autoregressive subtask text followed by flow sampling. Current OpenPI README describes π0.5 trained with knowledge insulation and only supports the flow-matching head for π0.5 training/inference; do not assume downloading it reproduces this entire household hierarchy. Sources: π0.5 Figure 3 (p.4), Figure 4 (p.6), §§IV-A–D, and OpenPI README.
-
-- [π0.5 paper](https://www.physicalintelligence.company/download/pi05.pdf)
-
-## 40. Then add efficient continuous action generation
-
-**Section: π0.5: training**
-
-This diagram follows the original 19-page π0.5 paper rather than treating current OpenPI code as an exact reproduction. First, pretrain for 280k gradient steps with next-token prediction over text, boxes, and compressed FAST action tokens. This phase uses mobile manipulation, multi-environment non-mobile data, laboratory cross-embodiment data including OXE, high-level labels, and web data. Second, add a randomly initialized action expert and train another 80k steps with joint cross-entropy and flow matching, using flow-loss coefficient 10.0. Post-training action data use MM/ME successful episodes filtered by a length threshold. It retains web and relevant high-level data, adds verbal instruction examples, and omits laboratory cross-embodiment data. FAST discrete action outputs and flow action outputs are masked from attending to one another. FAST compresses a chunk; it is not identical to OpenVLA’s independent 256-bin coordinates. Original π0.5 discretizes proprioceptive state into text input, unlike π0’s continuous state projection. At inference, the system uses autoregressive subtask text followed by flow sampling. Current OpenPI README describes π0.5 trained with knowledge insulation and only supports the flow-matching head for π0.5 training/inference; do not assume downloading it reproduces this entire household hierarchy. Sources: π0.5 Figure 3 (p.4), Figure 4 (p.6), §§IV-A–D, and OpenPI README.
-
-- [π0.5 paper](https://www.physicalintelligence.company/download/pi05.pdf)
-
-## 41. Choose a subtask, then generate its motion
-
-**Section: π0.5: inference**
-
-The equation is the paper’s model factorization, not the unconstrained probability chain rule: its action distribution depends on the inferred subtask c_t and current observation, but not directly on the overall task prompt ℓ. The same model supports autoregressive semantic output and continuous flow-based action output with different expert weights. In the actual system high-level inference uses four camera views, while low-level inference uses the wrist and forward cameras; o_t denotes available observation context rather than asserting identical camera subsets. Proprioception includes joints, grippers, lift and base velocity. The mobile platforms have 18 or 19 action dimensions. They issue arm/gripper/lift targets and base velocities at 50 Hz with action chunking; simple PD controllers track the targets. The paper reports no additional trajectory planner or collision detector in this execution path. Ten flow denoising steps generate the 50-step chunk. A 50 Hz command stream does not mean the entire VLM generates a semantic subtask 50 times per second. The official explanation describes a one-second chunk. Distinguish high-level demonstration labels used in training from inferred subtasks used at deployment. Sources: π0.5 §§IV-A/B/E and official explanation.
-
-- [π0.5 paper](https://www.physicalintelligence.company/download/pi05.pdf)
-- [π0.5 explanation](https://www.pi.website/blog/pi05)
-
-## 42. The hierarchy separates two conditional decisions
-
-**Section: π0.5: inference**
-
-The equation is the paper’s model factorization, not the unconstrained probability chain rule: its action distribution depends on the inferred subtask c_t and current observation, but not directly on the overall task prompt ℓ. The same model supports autoregressive semantic output and continuous flow-based action output with different expert weights. In the actual system high-level inference uses four camera views, while low-level inference uses the wrist and forward cameras; o_t denotes available observation context rather than asserting identical camera subsets. Proprioception includes joints, grippers, lift and base velocity. The mobile platforms have 18 or 19 action dimensions. They issue arm/gripper/lift targets and base velocities at 50 Hz with action chunking; simple PD controllers track the targets. The paper reports no additional trajectory planner or collision detector in this execution path. Ten flow denoising steps generate the 50-step chunk. A 50 Hz command stream does not mean the entire VLM generates a semantic subtask 50 times per second. The official explanation describes a one-second chunk. Distinguish high-level demonstration labels used in training from inferred subtasks used at deployment. Sources: π0.5 §§IV-A/B/E and official explanation.
-
-- [π0.5 paper](https://www.physicalintelligence.company/download/pi05.pdf)
-
-## 43. How much of each task did the robot complete?
-
-**Section: π0.5: evidence**
-
-This reproduces original π0.5 Figure 7(b). §V-A specifies three held-out real homes, with kitchen and bedroom tasks in each. Thus the caption’s three kitchens plus three bedrooms refer to six room environments within three homes. The y-axis is average task progress, not binary episode success. The rubric roughly credits completed task steps; moving half the dishes can receive partial credit. The caption reports ten trials per task/environment. Appendix B describes canceled-episode exclusions, so do not derive a larger exact total from the bar count. Many quantitative trials last 2–5 minutes; longer 10–15-minute demonstrations are separate evidence. This is an environment-generalization result, not a measurement of arbitrary unseen motor skills. Source: π0.5 §V-A, Figure 7 and evaluation appendix.
-
-- [π0.5 paper](https://www.physicalintelligence.company/download/pi05.pdf)
-
-## 44. Training labels help even without an explicit hierarchy
-
-**Section: π0.5: evidence**
-
-This reproduces original π0.5 Figure 13 in controlled mock environments. Full π0.5 uses high-level labels and explicit subtask inference. The implicit-HL variant keeps the high-level training examples but omits that inference at runtime; no-HL removes both. The full-versus-implicit comparison is labeled p=0.144, so the observed mean gap should not be presented as a statistically established advantage at conventional thresholds. High-level supervision remains useful even without explicit high-level inference. The entire plot retains no-web, no-verbal-instruction, GPT-4 high-level, and human high-level ablations, with uncertainty and reported p-values. Their definitions are in §V-E. The comparison uses the full low-level inference process with high-level variants. The full model outperforming this particular human high-level baseline does not establish general human-level ability. Metric: task progress. Source: π0.5 §V-E and Figure 13.
-
-- [π0.5 paper](https://www.physicalintelligence.company/download/pi05.pdf)
-
-## 45. Generalization still has a physical scope
-
-**Section: π0.5: scope**
-
-The photographs show real evaluation rooms from π0.5 Figure 6; they are not labeled failure episodes. The failure classes come from the paper’s discussion: difficult or unfamiliar handles, partial observability such as occluded spills, and distracted high-level choices such as repeated drawer opening and closing. Longer-context memory and complex user preferences remain limitations. The paper and official explanation concern transferring learned motor skills into unfamiliar environments, not arbitrary new physical skills. The current OpenPI π0.5 release is trained with knowledge insulation and supports only the flow-matching head for training and inference. It should not be equated with downloading a complete reproduction of the paper’s hierarchical mobile household system.
-
-- [π0.5 paper](https://www.physicalintelligence.company/download/pi05.pdf)
-- [OpenPI release](https://github.com/Physical-Intelligence/openpi)
-
-## 46. Experience can improve an imitation-trained policy
-
-**Section: Beyond behavioral cloning**
-
-Behavioral cloning learns from demonstrated actions. Reinforcement learning optimizes expected cumulative reward and can exploit feedback about what happened after actions. A pretrained VLA supplies useful exploration and representations but generally does not supply a trained critic/value function. This diagram is an authored overview, not the exact algorithm of π0.5 and not a claim that π0.5 itself used this RL stage. CS224R lecture 17 distinguishes online updates from iterated offline learning over large rollout batches, describes value-guided supervised policy updates, and explores latent steering and residual/edit policies. These methods make different compromises; we do not teach them as interchangeable or guaranteed improvements. Human interventions can supply useful imitation data and coexist with RL. Large models incur substantial gradient-update costs, physical resets and rollouts can dominate collection time, and diffusion/flow action generators plus chunking complicate direct use of algorithms built around tractable per-step policy probabilities. Avoid transferring the lecture’s informal “80% plateau” into a universal reliability law or reading π0.5’s task-progress metric as success probability. Sources: CS224R lecture 17 pp.5–15 and 20–29, lecture 2 on online interventions.
-
-- [CS224R, lecture 17](https://cs224r.stanford.edu/slides/17_cs224r_rl_vlas_2026.pdf)
+- [π0 v4 §IV](https://arxiv.org/html/2410.24164v4#S4)
 - [CS224R, lecture 2](https://cs224r.stanford.edu/slides/02_cs224r_imitation_2026.pdf)
 
-## 47. SayCan: choose a useful, feasible skill
+## 31. Compare the training and inference procedures
 
-**Section: Language models and robot control**
+**Section: Learning a continuous chunk generator**
 
-SayCan combines language-model usefulness with learned value-function feasibility and selects from a predefined repertoire of language-conditioned robot skills. The diagram is conceptual, without invented numerical scores. The selected skill has learned low-level control. Scene grounding enters through the value functions; do not imply the original language prompt receives a rich visual feedback stream. The spill instruction and candidate skill paraphrase the paper’s motivating example. The original study includes physical mobile manipulation, unlike the simulation results later in this section.
+These are alternative ways of representing a conditional distribution, not an expressive versus inexpressive distinction. An autoregressive categorical model can represent multimodal action sequences. A flow field can transform noise into a multimodal continuous distribution. The averaging limitation of direct squared-error action prediction does not apply to autoregressive likelihood training. FAST §VI-E reports comparable performance for FAST and flow on some evaluated tasks, with faster training for FAST in some settings and faster inference for the smaller flow expert in that implementation. Such results depend on tokenizer, backbone, model size, sampler, task, and hardware. Do not read a serial token count divided by a flow step count as a wall-clock speedup.
 
-- [SayCan · 2022](https://say-can.github.io/)
+- [FAST §§V–VI](https://arxiv.org/html/2501.09747v1#S5)
+- [π0 v4 §IV](https://arxiv.org/html/2410.24164v4#S4)
 
-## 48. Code as Policies: let code close the loop
+## 32. π0.5 combines household decisions with learned robot motion
 
-**Section: Language models and robot control**
+**Section: π0.5 as a worked example**
 
-The code shown here is authored pseudocode, not a verbatim model output or a promise that a specific API exists. Code as Policies uses language-model-generated programs to combine perception and control APIs; these programs can contain loops, geometry computations, and feedback. Running a generated program is distinct from querying an LLM for every servo command. The physical tabletop image is a crop of Figure 2a from the paper, rendered from PDF page 2. It illustrates the original system’s setting and is not a test of the pseudocode on this slide. The full project provides demonstrations and prompts.
+The photographs are from original π0.5 Figure 2; they depict a broader kitchen-cleaning demonstration. The four-box trace is our illustrative decomposition of the concrete dishes-in-sink task, not a frame-by-frame annotation or a measured rollout. This objective requires both choosing a useful next subtask and physically carrying it out in a new arrangement. The coming pages explain the records, training stages, and runtime that produce these two capabilities. The focus is the original research system, not a claim that a public checkpoint alone reproduces its full deployment.
 
-- [Code as Policies · 2022](https://code-as-policies.github.io/)
+- [π0.5 paper](https://www.physicalintelligence.company/download/pi05.pdf)
 
-## 49. VoxPoser: turn language into spatial objectives
+## 33. Different records supervise actions, subtasks, and visual answers
 
-**Section: Language models and robot control**
+**Section: π0.5 as a worked example**
 
-VoxPoser uses language models and perception tools to generate code that composes three-dimensional value maps. Affordance maps encourage desired interactions and constraint maps discourage forbidden regions; motion planning and low-level control execute the resulting objectives. Cached code can be re-evaluated with new observations. The original method figure is cropped to the map and planning panels, omitting its dense code panel. This slide does not claim that the LLM directly outputs motor torques, or that all perception and control components were trained from scratch or without robot experience. RGB-D denotes color plus depth.
+These are illustrative input/target records matching the original paper’s data roles, not reproductions of particular training entries. π0.5 §IV-C combines mobile household robot demonstrations, non-mobile robots in diverse homes, laboratory robots and Open X-Embodiment data, manually labeled high-level subtasks and boxes, and web visual tasks. The target mobile household subset is about 400 hours in about 100 home environments; it is not the entire dataset. Robot observations include images and proprioceptive state. Subtask labels condition low-level action training; high-level training predicts those labels from the overall task and current observation. Web records include captions, visual answers, and localization targets. The full numeric data mixing ratios are not disclosed.
 
-- [VoxPoser · 2023](https://voxposer.github.io/)
+- [π0.5 paper](https://www.physicalintelligence.company/download/pi05.pdf)
 
-## 50. A numeric target still needs a robot controller
+## 34. π0.5 first learns all record types with next-token prediction
 
-**Section: Language models and robot control**
+**Section: π0.5 as a worked example**
 
-This conceptual loop describes direct end-effector control in the recent RoboDojo study. The model requests Cartesian gripper pose and opening; the surrounding stack validates actions, transforms the target, solves inverse kinematics and plans a joint trajectory. The physical controller or simulator then executes the joint path and returns new sensor information. A target is not a torque. Inverse kinematics maps an end-effector pose to robot joint configurations. The reported RoboDojo interface provides move_eef and give_up, not a semantic pick-and-place skill library. No learned motor policy supplies the direct method’s motion.
+Original π0.5 §IV-C first trains a web-pretrained VLM autoregressively on discrete targets, including FAST-encoded action chunks. Textual records naturally supply text tokens; localization supplies serialized location tokens. The loss is target-token cross-entropy, not flow matching at this phase. This reuses the VLM learning setup rather than introducing a separate architecture for each supervision type. The paper reports 280k gradient steps. Data include home and laboratory robot actions, high-level labels, and web tasks. Control-mode markers distinguish joint versus end-effector pose targets; actions are normalized with dataset-specific quantiles and padded for differing embodiments. Those implementation details belong in the training records, not in an assumed universal action convention.
 
-- [RoboDojo study §3–4](https://arxiv.org/html/2609.24170v1)
+- [π0.5 paper](https://www.physicalintelligence.company/download/pi05.pdf)
+- [FAST §§V–VI](https://arxiv.org/html/2501.09747v1#S5)
 
-## 51. RoboDojo: images are part of the policy interface
+## 35. Post-training adds flow while keeping token supervision
 
-**Section: Language models and robot control**
+**Section: π0.5 as a worked example**
 
-This image is the paper’s three-view grounding illustration for a make-kong task, not a physical robot photo or a representative sample of all benchmark tasks. The undated gpt-6-astra alias is frozen and used at medium reasoning effort. Inputs include three RGB cameras, proprioception, wiki-derived goal and scoring descriptions, full text history, and the latest two image turns. The direct policy does not receive depth, privileged object poses, or a reward oracle. These observation and instruction choices are part of the measured system and can differ from published learned-policy baselines. See §§3.2–3.3 of the primary paper.
+Original π0.5 §IV-B/D jointly optimizes target-token cross-entropy, including FAST action tokens, and flow matching with weight 10 for 80k additional steps. The action expert starts from random weights; the model retains its text-prediction capability. The attention mask prevents discrete and continuous action representations from attending to each other, so the flow head cannot copy the FAST action target. Post-training uses successful, length-filtered mobile and other-home robot episodes, corresponding high-level labels, web records, and new verbal-instruction examples. In those examples an expert directs the learned low-level policy with subtask commands, supplying high-level choices. Laboratory cross-embodiment data do not remain in this phase. This is supervised post-training, not reinforcement learning.
 
-- [RoboDojo study §3–4](https://arxiv.org/html/2609.24170v1)
+- [π0.5 paper](https://www.physicalintelligence.company/download/pi05.pdf)
 
-## 52. RoboDojo performance varies sharply by task type
+## 36. At runtime, predict a subtask and then generate its motion
 
-**Section: Language models and robot control**
+**Section: π0.5 as a worked example**
 
-These are Table 1 native full-task success rates: 30.50, 4.00, 8.25, 38.67 and 31.00 percent, with five-category macro average 22.48 percent. The separate score metric is 28.97 and must not be relabeled as success rate. The paper evaluates 42 tasks with 50 trials each and one seed. Read the graph as a descriptive category pattern, not proof of a causal reasoning or memory mechanism. The pinned release README discloses two targeted task-cell replacements and a 170-call budget; the paper states 100 by default. Those campaign details remain unreconciled, so this is explicitly a paper-reported result, not an independently reproduced leaderboard rank. Input access differs from policy baselines, which are intentionally omitted here.
+Original π0.5 §IV-A/B separates p(s|o,ℓ), a high-level subtask distribution, from p(A|o,s), the low-level action-chunk distribution. The low-level factor uses inferred subtask s instead of the overall instruction ℓ. Both are represented by the same model, used with different inference roles. High-level inference uses autoregressive text decoding; low-level inference uses ten flow integration steps. The model predicts 50-command chunks for the full 18–19 dimensional mobile platform, not the seven-coordinate teaching interface. Low-level actions use joint/gripper and torso targets plus base velocity. The diagram omits scheduling rates: choosing a new semantic subtask need not occur once per individual control tick.
 
-- [RoboDojo study §3–4](https://arxiv.org/html/2609.24170v1)
-- [Released run notes](https://github.com/RoboProbe/RoboProbe/blob/3c0bc68383a75bf3fa2d7bfc5ab1d1241c7e171e/results/l3_inspect_eef_official_2100/README.md)
+- [π0.5 paper](https://www.physicalintelligence.company/download/pi05.pdf)
 
-## 53. Astranomy: the harness changes the control system
+## 37. The π0.5 architecture now has a role for every input
 
-**Section: Language models and robot control**
+**Section: π0.5 as a worked example**
 
-Astranomy’s Direct EEF system chooses numeric targets using a short observation window. The agentic Codex system can maintain persistent history and use code and tools. The orchestration system supervises Cosmos3-Nano-Policy proposals. These are systems with different histories and harnesses, not three controlled doses of computation applied to an otherwise identical policy. All use the report’s 120-task simulation suite. A controller remains below each high-level interface. The study’s public report is retrieved and supports these claims; the linked implementation endpoint was not publicly retrievable in the audit. Model labels are those used in the report, without assuming an undisclosed dated checkpoint.
+Original π0.5 §IV-A and Appendix E use PaliGemma for image-language processing and a separate 300M-parameter action expert. Proprioceptive state is discretized and supplied as text tokens in π0.5, unlike the continuous state projection used by original π0. Image features and task/state text form contextual tokens. The action expert receives the candidate noisy action chunk and generation-time embedding and attends to that context. Within the continuous action block, tokens use bidirectional attention. Text generation remains causal. The two output roles are invoked with the conditioning appropriate to high-level or low-level inference; the diagram is not claiming that one unchanged prompt simultaneously produces both outputs on every call. Training also retains a FAST discrete-action output, as the preceding page showed.
 
-- [Astranomy §2–4](https://research.nvidia.com/labs/srl/projects/astranomy/index.html)
+- [π0.5 paper](https://www.physicalintelligence.company/download/pi05.pdf)
 
-## 54. Astranomy reports system-level success rates
+## 38. The paper measures task progress in unseen homes
 
-**Section: Language models and robot control**
+**Section: π0.5 as a worked example**
 
-The report evaluates Direct EEF at 66.3%, the persistent agent at 74.8%, and policy orchestration at 66.5% full-task success, over 120 tasks with five episodes each, seeds 0–4. It uses three camera views at 384×216 and medium effort. Physics is paused during inference, with 15 Hz action execution and task-specific action-step limits; there is no wall-time or retry cap. These system-level rates are not evidence that computation alone caused a gain. Five episodes per task also limit precision for small differences. Do not compare this suite’s rates directly with the separate RoboDojo 42-task campaign or the selected ten-task hybrid experiment. No error bars are invented.
+Original π0.5 §V-A and Figure 7 evaluate three held-out real homes, each with kitchen and bedroom tasks: three kitchens and three bedrooms, not six independent homes. Panel b reports average task progress over ten trials per task/environment. The plotted task families are items in drawer, dishes in sink, and laundry in basket; not every task is present in every home. Progress rubrics award partial completion, so these bars are not binary full-task success rates. Mock environments are also plotted. Quantitative episodes last approximately two to five minutes; longer published demonstrations do not establish an equivalent measured success rate. The figure supports transfer of learned household skills to these test environments. It does not establish unrestricted household autonomy or performance on arbitrary homes and tasks.
 
-- [Astranomy §2–4](https://research.nvidia.com/labs/srl/projects/astranomy/index.html)
+- [π0.5 paper](https://www.physicalintelligence.company/download/pi05.pdf)
 
-## 55. A paused simulator does not test real-time reactions
+## 39. Code as Policies: write a program for the task
 
-**Section: Language models and robot control**
+**Section: Programs, hierarchy, and robot execution**
 
-Step through this schematic timeline. Astranomy pauses physics while a model call is in flight, so an object cannot drift during that interval. Once a command arrives, action playback runs at 15 Hz. The reported 18.56-second mean Direct EEF call latency is computed over successful episodes only and includes network delay; it is not a control-loop period or an unconditional latency estimate. Timeline widths are schematic and do not reconstruct an episode. A physical experiment, or a simulation where physics continues while the model thinks, tests a different timing regime. Embodied First Exam explicitly distinguishes paused standard mode from standard-realtime, though its other protocol defaults also need to be matched.
+Start by identifying the blue block and green bowl in the actual project photographs. These images are from Figure 2a; the instruction and program on this slide are authored teaching material, not a reproduced model output or an executed robot test. The toy uses vector addition and a fixed vertical gripper orientation. Its object anchors and 12-cm clearance are assumed suitable for this scene. The program chooses a sequence of perception and motion calls. Following slides define the external functions and show their execution. Do not describe this particular program as a general pick-and-place implementation: grasp geometry, calibration, motion planning and grasp-status checking belong to its provided interface.
 
-- [Astranomy §2–4](https://research.nvidia.com/labs/srl/projects/astranomy/index.html)
-- [Embodied First Exam protocol](https://github.com/mll-lab-nu/embodied-first-exam/blob/main/docs/protocol/README.md)
+- [Code as Policies](https://code-as-policies.github.io/)
 
-## 56. Hybrid control: accept a policy prefix or correct it
+## 40. Define the API before reading the generated program
 
-**Section: Language models and robot control**
+**Section: Programs, hierarchy, and robot execution**
 
-In Systematically Exploring, released RoboDojo-task-finetuned π0.5 weights propose a 50-step joint-action sequence. Astra observes the images and proposal, then either accepts the first 1–15 policy steps or substitutes a 1–5-step end-effector correction. These are mutually exclusive branches, not two commands executed consecutively. Both pass through the robot execution stack and receive observations after execution. The direct baseline also outputs 1–5 end-effector steps. The explicit policy-training qualification matters: frozen general-model weights do not make the entire hybrid system free of robot-specific training. Here a target step refers to the paper’s direct action interface, not an unmediated torque.
+These names and return types define an authored toy interface. detect returns the identifier of one uniquely matching object; get_position returns a NumPy three-vector for its calibrated anchor in metres in the robot base frame. Therefore adding a three-element list in the previous program performs numerical vector addition, not Python list concatenation. grasped is a supplied status predicate. move_to tracks a Cartesian target at fixed gripper orientation and returns when its motion operation completes; this does not itself verify task success. The gripper call opens or closes the fingers. The LLM composes these functions rather than implementing the detector, calibration, kinematics, or servo here. The broader Code as Policies method can also generate control logic and helper functions.
 
-- [Astra policy study §3](https://arxiv.org/html/2609.38537v1)
+- [CaP · methods + APIs](https://arxiv.org/html/2209.07753v4)
 
-## 57. Hybrid control helps on this selected task subset
+## 41. Run the program one operation at a time
 
-**Section: Language models and robot control**
+**Section: Programs, hierarchy, and robot execution**
 
-The paper reports 13 of 50 full-task completions for Direct (26%) and 24 of 50 for Hybrid (48%). Each group of rectangles is an aggregate count, with filled cells placed together for legibility; rectangle positions do not depict matched per-instance outcomes. The study uses ten selected tasks and five paired initializations, with task instances, seeds, descriptions, reasoning settings, and end-effector interface held fixed. The selection is stratified by published π0.5 success and emphasizes low-success tasks: six from the lowest stratum, two from the next, one each from the remaining two. The gain is not uniform across tasks; some classification tasks favor Direct. The standalone π0.5 reference is a reweighted published number, not a locally rerun paired baseline, so it is omitted.
+Advance through four authored snapshots. The first demonstrates a perception return value. The second requests the grasp position and closure. The third summarizes the lift-and-transfer part of the program; the full program includes a lift before lateral transfer. The fourth releases and receives a new image. The values are illustrative and use the toy base-frame convention, not the different world-frame convention of the later RoboDojo interface. The runtime, perception stack, planner, controller and physical world produce these intermediate values and effects. The diagram is a teaching animation rather than a physics simulation or execution of the displayed Python. A returned motion status and an observed task outcome are different checks.
 
-- [Astra policy study §3](https://arxiv.org/html/2609.38537v1)
+- [Code as Policies](https://code-as-policies.github.io/)
 
-## 58. The evaluation protocol is part of the result
+## 42. A feedback loop does not require an LLM call at every step
 
-**Section: Language models and robot control**
+**Section: Programs, hierarchy, and robot execution**
 
-This is an authored controlled-experiment diagram, not a description shared by all cited benchmarks. Hold test cases and the action interface fixed when asking about a decision component. Explicitly declare sensor access, task descriptions, tools, memory, prior trials, code generation, resets, and adaptation. Freeze development before held-out evaluation. Report the physics clock: paused during inference or advancing while thinking. Measure elapsed time alongside native completion. A separate engineering question may legitimately allow each complete system its own interface, but that is a best-system comparison and cannot isolate the decision model alone. Embodied First Exam illustrates why mode names are insufficient: standard and standard-realtime differ in clock and can have different reset defaults.
+This authored bounded loop retries a grasp using newly queried positions and a supplied grasp-status check. It illustrates a runtime distinction: the LLM produces source code, and ordinary program execution repeats its body. A system may separately ask an LLM to revise code after failure, but that is an additional loop and is not required for each sensor query. The loop uses the previous slide’s toy API, including blocking moves and a fixed orientation. It omits recovery after exhausting attempts because the teaching point is where repeated feedback occurs. Code as Policies supports such perception-conditioned logic, but the exact program here is not a quoted experimental implementation.
 
-- [Embodied First Exam protocol](https://github.com/mll-lab-nu/embodied-first-exam/blob/main/docs/protocol/README.md)
-- [Astranomy §2–4](https://research.nvidia.com/labs/srl/projects/astranomy/index.html)
+- [CaP · methods + APIs](https://arxiv.org/html/2209.07753v4)
 
-## 59. Question: how would you compare these systems?
+## 43. Change the model output, not the physical task
 
-**Section: Research exercise**
+**Section: Programs, hierarchy, and robot execution**
 
-Pause here for audience discussion. This is an authored research exercise and diagram, not a real trial or a reported interview question. The drawer moves during the model’s inference delay. Ask learners to identify information access, timing, task adaptation, and outcome variables before choosing a winner. A VLA action chunk and a general-model-plus-planner stack can differ in both learned knowledge and action interface. The question should elicit the distinction between a controlled component comparison and an engineering comparison of complete systems. Stale observations and commands matter when physics continues during computation.
+The upper row uses original OpenVLA as a concrete numeric-action example: visual and language inputs are mapped to action tokens, decoded into a robot command, and executed by a controller. The lower row describes the authored program example. Its language model uses code knowledge and API examples to generate logic; its execution stack supplies physical capabilities. This does not mean a code-based robot needs no robot experience. Its detector, calibration, learned skills or controller may have been built or trained using embodied data. Conversely, a VLA may also be wrapped in tools or code. The rows distinguish the emitted object and the location of learned motor behavior, not two mutually exclusive species of robot.
+
+- [OpenVLA · §3](https://arxiv.org/html/2406.09246v3#S3)
+- [CaP · methods + APIs](https://arxiv.org/html/2209.07753v4)
+
+## 44. A task contains decisions at different scales
+
+**Section: Programs, hierarchy, and robot execution**
+
+This authored clean-table example separates choosing a useful behavior from producing its motor commands. Putting a cup in a tray and wiping a spill require different motion patterns, and each behavior can involve many feedback updates. The diagram depicts possible subtasks, not an instruction to execute both branches simultaneously. Their order should depend on the actual scene and task. Hierarchical designs can reuse a motor behavior under several broader goals and let local feedback proceed between semantic updates. A hierarchy does not guarantee success: an incorrect subtask, a poor motion policy, or an unsuitable execution interface can each prevent completion.
+
+- [π0.5 · original paper](https://www.physicalintelligence.company/download/pi05.pdf)
+
+## 45. Separate semantic context from local action generation
+
+**Section: Programs, hierarchy, and robot execution**
+
+Use these labels operationally. Some designs separate visual-language interpretation from a motor-action network, allowing different update schedules. Semantic context can be a latent feature representation, not an explicit verbal plan or chain of thought. The motor module still uses a robot controller beneath its action output. There is no universal model size, frequency, message format, or training objective implied by the names. System A/B labels are paper-specific and are not treated here as standard aliases. GR00T N1, for example, connects VLM token features to a flow-based action module and trains the modules together. A modular learned policy and a separate-model deployment are different design decisions.
+
+- [GR00T N1 · §2.1](https://arxiv.org/html/2503.14734v2#S2.SS1)
+
+## 46. A message can be a subtask or learned features
+
+**Section: Programs, hierarchy, and robot execution**
+
+The top row illustrates an explicit semantic-subtask interface, as used in the original π0.5 model factorization. The lower row illustrates feature conditioning; the colored bars are symbolic dimensions, not measured neural activations. GR00T N1 uses a sequence of VLM features with cross-attention, while original Helix uses one continuous latent vector. Those are related feature interfaces but not identical implementations. Neither learned features nor a System 2 label establish that a model produced a natural-language reasoning trace. An interface must be specified before deciding how it can be inspected, cached, updated, or reused.
+
+- [π0.5 · original paper](https://www.physicalintelligence.company/download/pi05.pdf)
+- [GR00T N1 · §2.1](https://arxiv.org/html/2503.14734v2#S2.SS1)
+
+## 47. Helix sends latent intent to a fast visuomotor policy
+
+**Section: Programs, hierarchy, and robot execution**
+
+This is the original February 2025 Helix, not a later Helix version. Figure reports a 7B VLM feeding one continuous latent vector to an 80M visuomotor Transformer. The action module also sees fresh images and robot state. Both are trained jointly with regression; inference uses separate onboard processes and a shared latent. The reported 7–9 Hz and 200 Hz rates describe this implementation, not universal definitions. Approximately 500 hours of teleoperation receive hindsight language labels. The outputs are upper-body targets, not direct evidence of torque-level LLM control. No explicit textual reasoning trace is required by this architecture.
+
+- [Helix · 20 Feb 2025](https://www.figure.ai/news/helix)
+
+## 48. π0.5 uses an explicit semantic subtask
+
+**Section: Programs, hierarchy, and robot execution**
+
+Map the original π0.5 factorization onto the preceding interface distinction: p(A,c|o,ℓ)=p(c|o,ℓ)p(A|o,c). The low-level factor conditions on the inferred subtask and observation rather than directly on the overall task prompt. The semantic and continuous outputs belong to the paper’s unified model with different expert weights. This drawing does not assert a particular GPU allocation, number of OS processes, or asynchronous schedule. High-level labels supervise semantic decisions, while action demonstrations ground motor generation. The outer model boundary distinguishes internal computation roles from a system assembled by independently deploying two unrelated pretrained models.
+
+- [π0.5 · original paper](https://www.physicalintelligence.company/download/pi05.pdf)
+
+## 49. Keep the intent; refresh the local feedback
+
+**Section: Programs, hierarchy, and robot execution**
+
+This is an authored logical schedule, not a measured timing trace, fixed frequency ratio, or description of every hierarchical robot. The semantic message stays unchanged while the motor policy repeatedly receives fresh observations. Each displayed action box summarizes a behavior stage for readability; a real stage usually contains many numerical updates. The distinction is between refreshing sensor-conditioned local control and recomputing semantic context. A system could implement this with separate asynchronous processes or another scheduler. A reused message can also become stale, so the design needs an update rule appropriate to its task. These generic possibilities are not a claim that the original π0.5 deployment uses the exact Helix schedule.
 
 
-## 60. Solution: evaluate the operating curve
+## 50. A tool call can request a numeric robot target
 
-**Section: Research exercise**
+**Section: Programs, hierarchy, and robot execution**
 
-The curves are authored and schematic, with no numeric predictions or measured points. Compare repeated matched cases over meaningful resource budgets and report uncertainty at the task or scene level. Elapsed time includes model computation, tool use, and execution. State and match whether physics advances during computation, and use the same disturbance schedule. Declare training, demonstrations, prior exploration, reusable code, and resets even when equalizing them is impossible. A shared action interface isolates a decision-component difference. A best-system experiment instead lets each method use its preferred executor and must expose those design differences. Connect the discussion back to observation, action, feedback, and data from the beginning of the lecture.
+The call uses the move_eef schema from An Unexpected Robot Policy, Appendix A. The target value and note are authored illustrations. The published interface uses absolute world-frame grasp-point coordinates, permits subsets of dimensions, and retains observed values for unspecified dimensions. Non-learned software validates a request and attempts joint-path planning; accepted paths execute before a new observation returns. IK means inverse kinematics. A target request is different from generating a reusable Python program and from selecting a learned policy proposal. The model-facing motion tool does not supply semantic pick/place primitives. This is a simulation interface example, not a reported successful motion.
 
-- [Embodied First Exam protocol](https://github.com/mll-lab-nu/embodied-first-exam/blob/main/docs/protocol/README.md)
+- [Astra direct interface · App. A](https://arxiv.org/html/2609.24170v1)
+
+## 51. A general model can supervise a learned policy
+
+**Section: Programs, hierarchy, and robot execution**
+
+This follows the RoboDojo hybrid in Systematically Exploring. A released task-finetuned π0.5 policy proposes 50 joint-action steps. Astra either accepts a prefix of 1–15 steps or replaces it with 1–5 end-effector-target steps. The branches are mutually exclusive. The highlighted n=3, joint-coordinate values and two z targets are authored examples, not values extracted from a trial. Joint commands and Cartesian corrections use different action representations and their associated executors. The general model supplies review and correction while the robot policy supplies learned motion proposals. Frozen general-model weights do not remove the policy’s robot-specific training. No benchmark ranking or new robot test is asserted.
+
+- [Astra hybrid · RoboDojo](https://arxiv.org/html/2609.38537v1)
+
+## 52. Which component actually supplies robot actions?
+
+**Section: Programs, hierarchy, and robot execution**
+
+Use this table to answer four concrete questions, rather than to rank model families. A general VLM output alone is not a calibrated executable robot command. A VLA learns an action mapping from robot supervision and still needs a controller. A generated program relies on the meaning and implementation of its APIs, which may contain learned robot skills. A dual-system architecture divides semantic context and motor generation; it may itself be a VLA and can also expose tools. The row labels overlap. The robot-grounding column identifies where physical action competence must be supplied, not a universal claim that each component was trained from scratch or that programs cannot contain learned control.
+
+- [OpenVLA · §3](https://arxiv.org/html/2406.09246v3#S3)
+- [CaP · methods + APIs](https://arxiv.org/html/2209.07753v4)
+- [GR00T N1 · §2.1](https://arxiv.org/html/2503.14734v2#S2.SS1)
