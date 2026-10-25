@@ -12,11 +12,12 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'.build/week6-qa');
  await page.goto('file://'+path.join(root,'week-6-robot-learning.html'));
  const settle=()=>page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));await settle();
  const slides=await page.locator('.slide').evaluateAll(ss=>ss.map(s=>({id:s.id,title:s.dataset.title,section:s.dataset.section})));
- assert.equal(slides.length,30);
+ assert.equal(slides.length,60);
  const inspect=async label=>{
   const result=await page.locator('.slide:not([hidden])>svg').evaluate(svg=>{
    const visible=e=>{const r=e.getBoundingClientRect();return r.width>0&&r.height>0&&getComputedStyle(e).visibility!=='hidden';};
-   const ts=[...svg.querySelectorAll('text')].filter(t=>t.textContent.trim()&&visible(t)).map(t=>({text:t.textContent,b:t.getBBox()}));
+   const rootBox=svg.getBoundingClientRect();
+   const ts=[...svg.querySelectorAll('text')].filter(t=>t.textContent.trim()&&visible(t)).map(t=>{const b=t.getBoundingClientRect();return {text:t.textContent,b:{x:(b.x-rootBox.x)*1600/rootBox.width,y:(b.y-rootBox.y)*900/rootBox.height,width:b.width*1600/rootBox.width,height:b.height*900/rootBox.height}};});
    const outside=ts.filter(t=>t.b.x<45||t.b.x+t.b.width>1557||t.b.y<0||t.b.y+t.b.height>899).map(t=>t.text);
    const overlaps=[];
    for(let i=0;i<ts.length;i++)for(let j=i+1;j<ts.length;j++){
@@ -40,6 +41,7 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'.build/week6-qa');
   await page.evaluate(n=>window.deck.goTo(n),i);await settle();
   assert.equal(await page.locator('.slide:not([hidden])').count(),1);
   assert.equal(await page.locator('#counter').innerText(),`${i+1} / ${slides.length}`);
+  await page.locator('.slide:not([hidden]) video').evaluateAll(vs=>Promise.all(vs.map(v=>new Promise((resolve,reject)=>{if(v.readyState>=2)resolve();else{v.onloadeddata=resolve;v.onerror=()=>reject(v.error?.message);}}))));
   await inspect(slides[i].id);
   await page.locator('.slide:not([hidden])').screenshot({path:path.join(out,`slide-${String(i+1).padStart(2,'0')}.png`)});
   const kinds=await page.locator('.slide:not([hidden]) [data-step-next]').evaluateAll(bs=>bs.map(b=>b.dataset.stepNext));
@@ -59,6 +61,19 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'.build/week6-qa');
  for(const [width,height] of [[1280,770],[1024,650],[768,560]]){
   await page.setViewportSize({width,height});await settle();const b=await page.locator('#stage').boundingBox();assert.ok(b.x>=-1&&b.y>=-1&&b.x+b.width<=width+1);
  }
+ // Verify the embedded demonstration decodes, seeks, plays, and pauses on navigation.
+ await page.setViewportSize({width:1600,height:960});
+ await page.evaluate(()=>window.deck.goTo(6));await settle();
+ const video=page.locator('.slide:not([hidden]) video');assert.equal(await video.count(),1);
+ await video.evaluate(v=>new Promise((resolve,reject)=>{if(v.readyState>=2)resolve();else{v.onloadeddata=resolve;v.onerror=()=>reject(v.error?.message);}}));
+ const media=await video.evaluate(v=>({duration:v.duration,width:v.videoWidth,height:v.videoHeight}));assert.ok(media.duration>9&&media.duration<12);assert.equal(media.width,640);
+ await video.evaluate(v=>new Promise(resolve=>{v.onseeked=resolve;v.currentTime=5;}));
+ await page.locator('.slide:not([hidden])').screenshot({path:path.join(out,'robot-video-middle.png')});
+ await video.evaluate(v=>v.play());await page.waitForTimeout(250);assert.ok(await video.evaluate(v=>v.currentTime>5));
+ await page.evaluate(()=>window.deck.goTo(7));assert.ok(await page.locator('video').evaluate(v=>v.paused));
+ await page.evaluate(()=>window.deck.goTo(6));await page.emulateMedia({media:'print'});
+ assert.equal(await video.evaluate(v=>getComputedStyle(v).display),'none');assert.equal(await page.locator('.video-print').evaluate(v=>getComputedStyle(v).display),'block');
+ await page.locator('.slide:not([hidden])').screenshot({path:path.join(out,'robot-video-print.png')});await page.emulateMedia({media:'screen'});
  const before=await page.evaluate(()=>window.week6Examples.state());
  await page.evaluate(()=>window.dispatchEvent(new Event('beforeprint')));
  const printing=await page.evaluate(()=>window.week6Examples.state());for(const s of Object.values(printing))assert.equal(s.index,s.count-1);

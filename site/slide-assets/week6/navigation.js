@@ -103,6 +103,7 @@
         slide.classList.toggle("active", active);
         slide.hidden = printing ? false : !active;
         slide.inert = !active;
+        if (!active && !printing) slide.querySelectorAll("video").forEach(video => video.pause());
         slide.setAttribute("aria-hidden", String(!active));
       });
       if (focusedSlide && focusedSlide !== slides[index]) {

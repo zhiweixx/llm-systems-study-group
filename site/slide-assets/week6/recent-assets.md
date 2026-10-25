@@ -1,0 +1,9 @@
+# Recent-control section: primary image attribution
+
+These images illustrate the named source projects. They do not show new experiments run for this lecture. The HTML builder embeds each image so the deck works offline.
+
+- **`recent-cap-block-bowl.png`** — Liang et al., *Code as Policies*, Figure 2(a), physical tabletop block-and-bowl examples. Source PDF: https://arxiv.org/pdf/2209.07753 ; project: https://code-as-policies.github.io/ . PDF page 2 rendered with Poppler at maximum dimension 3600 px (page image 2782 × 3600), then cropped to `(292, 326, 820, 533)`. The crop removes surrounding prose; it preserves the two original photographs.
+- **`recent-voxposer-maps-path.jpg`** — Huang et al., *VoxPoser*, method illustration, maps and motion-planning panels. Source image: https://voxposer.github.io/media/figures/method.jpg ; project: https://voxposer.github.io/ . Original 1828 × 528 image cropped to `(986, 0, 1828, 482)`, omitting the code and instruction panels. No experimental content was altered.
+- **`recent-robodojo-three-views.png`** — *The Unexpected Robot Policy*, three simulated camera views from the make-kong grounding example. Source image: https://arxiv.org/html/2609.24170v1/figures/assets/grounding_make_kong_layout7_views.png ; paper: https://arxiv.org/html/2609.24170v1 . Copied without cropping or content changes. This is one illustrative task trace, not a physical robot photograph or the benchmark’s entire task distribution.
+
+All other figures in `scripts/week6/visual_recent.py` are authored explanatory SVG diagrams. The category and success charts transcribe the named primary reports. The final question, drawer-disturbance diagram, and operating curves are explicitly illustrative. Primary source links and experiment qualifications are retained in slide footers and speaker notes.
