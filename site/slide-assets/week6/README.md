@@ -1,5 +1,17 @@
 # Week 6 figure sources
 
+## New 30-slide overview (26 October 2026)
+
+`scripts/build_week6_overview.py` builds a separate standalone overview from `scripts/week6/overview_*.py`. It reuses the attributed robot dataset recording and selected foundational figures below. The 52-slide tutorial and original reference deck are preserved. All charts of reported results are explicitly scoped to their source protocol; no new robot experiments were run.
+
+- `overview-unitas.png`: intact [UNITAS Figure 1](https://arxiv.org/html/2610.12099v1/unitas_overview.png), Wang et al. (2026), [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). The slide clips to the central 3D interface panel; side panels are omitted for legibility. No plotted values are changed. [Paper](https://arxiv.org/abs/2610.12099).
+- `overview-rax-articulation.png`: intact [RAX Figure 3](https://arxiv.org/html/2610.22496v1/articulation.png), Huang et al. (2026), [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Shows fitted air-fryer geometry and planned hand poses. [Paper](https://arxiv.org/abs/2610.22496).
+- RAX charger chart: redrawn from Table 2, 26% and 94% success on 50 unseen simulated layouts after four/eight exploration episodes. This task has binary scoring; other task scores may include partial credit.
+- RATs chart: redrawn from [Table 4](https://playful-rats.github.io/assets/papers/rats-paper.pdf), using the no-play and curious-play rows for two execution systems. Trial counts remain visible. The skill card paraphrases the released library and labels its recorded uses as such.
+- The RSI diagrams summarize [Wang’s 123-round technical report](https://arxiv.org/abs/2609.31760), with development collection outcomes distinguished from a final held-out benchmark.
+
+Design references supplied by the user: [Flex-π reading-group slides](https://docs.google.com/presentation/d/1QmGqrGiUL1zaF2VGfYqd5bAaC1zxKeNoK7UD93NECf4/edit) and [How to Train and Fine-tune VLMs](https://docs.google.com/presentation/d/1-6qBQlqvwpGgWTgoPDTuSEAj17XNFFYD1agJAqMHdzk/edit). All 46 reference pages were inspected. The new presentation follows their simple, diagram-led academic organization; institutional branding and slide content are not copied.
+
 The HTML generator embeds these assets as data URIs. The presentation needs no external fonts, scripts, or images when used offline. White backgrounds, blue titles, divider rules, navigation and notes follow the existing course template.
 
 ## Source assets

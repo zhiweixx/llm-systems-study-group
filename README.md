@@ -15,7 +15,7 @@ The audience knows Transformer models and PyTorch but has little GPU systems bac
 | 3 | Multi-GPU parallelism and sharding | [22-slide visual overview](week-3-parallelism-overview.html), [overview notes](week-3-overview-speaker-notes.md), [50-slide reference](week-3-parallelism.html), [reference notes](week-3-speaker-notes.md), [PyTorch exercise](week-3-tp-exercise.py) |
 | 4 | Speculative decoding and LLM serving | [30-slide presentation](week-4-serving.html), [speaker notes](week-4-speaker-notes.md), [optional serving lab](week-4-lab/README.md) |
 | 5 | Linear attention | [49-slide presentation](week-5-linear-attention.html), converted from Gaotang Li’s [original PDF](sources/week-5/Linear_Attention_gaotang_li.pdf) |
-| 6 | Robot learning: VLMs, VLAs, and LLM agents | [52-slide tutorial](week-6-robot-learning.html), [original 30-slide reference](week-6-robot-learning-reference.html), [speaker notes and primary sources](week-6-speaker-notes.md) |
+| 6 | Robot learning: VLMs, VLAs, WAMs, and code-based agents | [30-slide overview](week-6-robotics-overview.html), [overview notes](week-6-overview-notes.md), [52-slide tutorial](week-6-robot-learning.html), [original 30-slide reference](week-6-robot-learning-reference.html), [tutorial notes](week-6-speaker-notes.md) |
 
 Week 1 is dated **September 10, 2026**, with a 30-minute presentation. The story connects GPU memory traffic to lower precision, fusion, coalescing, and tiling, then applies the ideas to memory budgets and MFU. Memory calculations use decimal GB and MB. Each of Questions 1–2 has a separate solution slide immediately afterward. Prefix-cache hit rates are reserved for Week 4. The full plan is in [curriculum.md](curriculum.md).
 
@@ -41,6 +41,8 @@ Week 6 is a **52-slide tutorial on robot learning** for an LLM/statistics audien
 
 ## Presenting and sharing
 
+The new [30-slide robotics overview](https://zhiweixx.github.io/llm-systems-study-group/week-6/overview.html#slide-1) teaches robot observations and actions, VLMs, VLAs, π0.5, world-action models, and code-based control. Recent RAX, RATs, COAP, and a 123-round RSI study illustrate which artifacts improve and how to evaluate them. Its layout follows the supplied reading-group references, with original diagrams, attributed source figures, a recorded robot episode, and an interactive action-chunk walkthrough. The 52-slide tutorial and original reference deck remain unchanged.
+
 The separate [22-slide Week 3 overview](https://zhiweixx.github.io/llm-systems-study-group/week-3/overview.html#slide-1) introduces the same parallelism and sharding concepts through ownership diagrams, a pipeline timeline, and a step-through ring-attention example. Slide 21 connects PyTorch, Megatron, and DeepSpeed with a software diagram and historical milestones. The original 50-slide deck remains intact at its existing URL for detailed study and exercises.
 
 Open the live presentation URL in a browser. Use the arrow keys, the Slides overview, or the Notes control. The HTML file is self-contained and can also be downloaded and opened offline. Use the presentation's Print / PDF control for a printable copy.
@@ -63,6 +65,7 @@ Share the live site URL for the complete materials, or a direct slide link such 
 - For Week 4, edit `scripts/week4/` and `site/slide-assets/week4/`, then run `.venv/bin/python scripts/build_week4.py`. Run `scripts/check_week4.cjs` with Playwright and Chrome for layout, navigation, interaction, and print checks. The optional serving experiment is in `week-4-lab/`.
 - For Week 5, `scripts/build_week5.py` converts body artwork from the original PDF in `sources/week-5/` into SVG embedded in `week-5-linear-attention.html`, with native headings and footers matching the earlier weeks. Regeneration requires Python with `pypdf`, `pdfplumber`, and Poppler’s `pdftocairo`. Edit the converter for the frame, attribution, or presentation controls, and run `scripts/check_week5.cjs` with Playwright and Chrome to check body-content fidelity, layout, navigation, and printing. Preserve the attribution to Gaotang Li and the original PDF.
 - For Week 6, edit `scripts/week6/` and `site/slide-assets/week6/`, then run `.venv/bin/python scripts/build_week6.py`. Run `scripts/check_week6.cjs` with Playwright and Chrome to check all 52 slides, video playback, and interactive frames, navigation, offline behavior, and print-state restoration.
+- For the separate 30-slide robotics overview, edit `scripts/week6/overview_*.py` and run `.venv/bin/python scripts/build_week6_overview.py`. Check all pages and interactions with `scripts/check_week6_overview.cjs`. This build does not modify either earlier Week 6 deck.
 - Edit the Markdown sources for the cheatsheet, speaker notes, curriculum, and references.
 - Edit `site/index.html`, `site/page.html`, and `site/styles.css` for the site layout.
 - Push to `main`. GitHub Actions rebuilds and publishes the site automatically.

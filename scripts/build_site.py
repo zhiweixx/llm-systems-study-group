@@ -80,6 +80,8 @@ def main():
     shutil.copy2(ROOT / "week-6-robot-learning.html", OUT / "week-6/slides.html")
     document("week-6-reference-notes.md", "Week 6 reference notes", "week-6/reference-notes.html", "../")
     shutil.copy2(ROOT / "week-6-robot-learning-reference.html", OUT / "week-6/reference.html")
+    document("week-6-overview-notes.md", "Robot learning overview notes", "week-6/overview-notes.html", "../")
+    shutil.copy2(ROOT / "week-6-robotics-overview.html", OUT / "week-6/overview.html")
     (OUT / ".nojekyll").touch()
     print(f"Built {len(list(OUT.rglob('*.html')))} HTML pages in _site/")
 
